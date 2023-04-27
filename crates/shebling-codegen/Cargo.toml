@@ -1,0 +1,20 @@
+[package]
+name = "shebling-codegen"
+version = "0.1.0"
+authors = ["Maria José Solano <majosolano99@gmail.com>"]
+edition = "2021"
+description = "Utility procedural macros for the `shebling` crate"
+readme = "README.md"
+repository = "https://github.com/MariaSolOs/shebling"
+license = "Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.56"
+quote = "1.0.26"
+syn = { version = "2.0.15", features = ["full"] }
+
+[dev-dependencies]
+trybuild = "1.0.80"

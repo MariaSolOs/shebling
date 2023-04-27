@@ -1,0 +1,17 @@
+error: expected attribute arguments in parentheses: #[new(...)]
+ --> tests/cases/new_invalid_attr.rs:7:7
+  |
+7 |     #[new]
+  |       ^^^
+
+error: unexpected end of input, expected nested attribute
+  --> tests/cases/new_invalid_attr.rs:13:11
+   |
+13 |     #[new()]
+   |           ^
+
+error: Invalid `#[new(..)]` content.
+  --> tests/cases/new_invalid_attr.rs:19:11
+   |
+19 |     #[new(wrong)]
+   |           ^^^^^
