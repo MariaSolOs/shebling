@@ -10,8 +10,7 @@ fn line_space(span: Span) -> ParseResult<char> {
     alt((one_of(" \t"), |span| {
         let (span, (_, range)) = ranged(one_of(UNISPACES))(span)?;
 
-        span.extra
-            .report(ParseDiagnostic::Unichar("space".into(), range));
+        span.extra.diag(ParseDiagnostic::Unichar("space", range));
 
         Ok((span, ' '))
     }))(span)
@@ -28,8 +27,8 @@ fn trivia(span: Span) -> ParseResult<String> {
         if let Some(comment) = comment {
             // Line continuations at the end of a comment are not actually line continuations.
             if comment.ends_with('\\') {
-                span.extra.report(ParseDiagnostic::MisplacedChar(
-                    "This backslash is part of a comment.".into(),
+                span.extra.diag(ParseDiagnostic::MisplacedChar(
+                    "this backslash is part of a comment.",
                     Range::from(&span),
                 ));
             }

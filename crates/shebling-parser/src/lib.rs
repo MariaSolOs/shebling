@@ -31,12 +31,10 @@ pub(crate) use quoted::line_continuation;
 
 mod trivia;
 
-type ParseResult<'a, R> = nom::IResult<Span<'a>, R, ParseError>;
-
 // region: Symbol location.
 type Span<'a> = nom_locate::LocatedSpan<&'a str, ParseContext>;
 
-#[derive(Clone, Copy, Debug, New)]
+#[derive(Clone, Copy, Debug)]
 struct Location {
     offset: usize,
     line: u32,
@@ -48,12 +46,18 @@ where
     S: Borrow<Span<'a>>,
 {
     fn from(value: S) -> Self {
-        let value: &Span = value.borrow();
-        Self::new(
-            value.location_offset(),
-            value.location_line(),
-            value.get_utf8_column(),
-        )
+        let value = value.borrow();
+        Self {
+            offset: value.location_offset(),
+            line: value.location_line(),
+            column: value.get_utf8_column(),
+        }
+    }
+}
+
+impl From<Location> for miette::SourceSpan {
+    fn from(value: Location) -> Self {
+        value.offset.into()
     }
 }
 
@@ -82,15 +86,21 @@ impl From<Range> for miette::SourceSpan {
 }
 // endregion
 
-// region: Parsing context.
+// region: Parsing state.
+type ParseResult<'a, R> = nom::IResult<Span<'a>, R, ParseError>;
+
 #[derive(Clone, Debug)]
 struct ParseContext {
     diags: RefCell<Vec<ParseDiagnostic>>,
 }
 
 impl ParseContext {
-    fn report(&self, diag: ParseDiagnostic) {
+    fn diag(&self, diag: ParseDiagnostic) {
         self.diags.borrow_mut().push(diag);
+    }
+
+    fn take_diags(&self) -> Vec<ParseDiagnostic> {
+        self.diags.take()
     }
 }
 
@@ -98,7 +108,7 @@ impl ParseContext {
 enum ParseDiagnostic {
     #[error("Misplaced character!")]
     #[diagnostic(code(shebling::misplaced_char), severity("warning"))]
-    MisplacedChar(String, #[label("{0}")] Range),
+    MisplacedChar(&'static str, #[label("{0}")] Range),
 
     #[error("Unicode character!")]
     #[diagnostic(
@@ -106,30 +116,59 @@ enum ParseDiagnostic {
         help("Delete and retype it."),
         severity("warning")
     )]
-    Unichar(String, #[label("unicode {0}")] Range),
+    Unichar(&'static str, #[label("unicode {0}")] Range),
 }
 
 impl ParseDiagnostic {
-    fn into_report(self, source_code: String) -> Report {
-        Report::new(self).with_source_code(source_code)
+    fn range(&self) -> &Range {
+        match self {
+            Self::MisplacedChar(_, range) | Self::Unichar(_, range) => range,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Diagnostic, Error)]
+#[error("Parser bailed!")]
+#[diagnostic(code("shebling::parser_error"))]
 struct ParseError {
+    #[label("stopped here")]
     location: Location,
+    #[related]
+    notes: Vec<ParseErrorNote>,
+    diags: Vec<ParseDiagnostic>,
 }
 
 impl nom::error::ParseError<Span<'_>> for ParseError {
     fn from_error_kind(input: Span<'_>, _kind: nom::error::ErrorKind) -> Self {
         Self {
-            location: Location::from(input),
+            location: Location::from(&input),
+            notes: Vec::new(),
+            diags: input.extra.take_diags(),
         }
     }
 
     fn append(_input: Span<'_>, _kind: nom::error::ErrorKind, other: Self) -> Self {
         other
     }
+}
+
+impl nom::error::ContextError<Span<'_>> for ParseError {
+    fn add_context(input: Span<'_>, ctx: &'static str, mut other: Self) -> Self {
+        other.notes.push(ParseErrorNote {
+            location: Location::from(input),
+            note: ctx,
+        });
+
+        other
+    }
+}
+
+#[derive(Debug, Diagnostic, Error)]
+#[error("{note}")]
+struct ParseErrorNote {
+    #[label("{note}")]
+    location: Location,
+    note: &'static str,
 }
 // endregion
 
@@ -158,5 +197,27 @@ where
 }
 // endregion
 
+fn source_to_span(source_code: &str) -> Span {
+    let context = ParseContext {
+        diags: RefCell::new(Vec::new()),
+    };
+
+    nom_locate::LocatedSpan::new_extra(source_code, context)
+}
+
 pub fn parse(source_code: &str) {
+    let diags = trivia::trivia1(source_to_span(source_code))
+        .finish()
+        .unwrap()
+        .0
+        .extra
+        .take_diags();
+
+    let source_code: Arc<str> = source_code.into();
+    for diag in diags {
+        println!(
+            "{:?}",
+            Report::new(diag).with_source_code(Arc::clone(&source_code))
+        );
+    }
 }
