@@ -8,15 +8,23 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag},
     character::complete::{char, newline, one_of},
-    combinator::{map, opt, recognize, value},
+    combinator::{map, opt, recognize, value, verify},
+    error::context,
     multi::{many0, many1},
     sequence::{pair, preceded, tuple},
+    Finish,
 };
 use nom_locate::position;
 use shebling_codegen::New;
-use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::{borrow::Borrow, sync::Arc};
 use thiserror::Error;
+
+
+#[macro_use]
+mod token;
+
+mod expr;
 
 mod quoted;
 pub(crate) use quoted::line_continuation;
