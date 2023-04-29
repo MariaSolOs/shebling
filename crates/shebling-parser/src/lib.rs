@@ -20,6 +20,69 @@ use std::cell::RefCell;
 use std::{borrow::Borrow, sync::Arc};
 use thiserror::Error;
 
+#[cfg(test)]
+#[macro_use]
+mod tests {
+    macro_rules! assert_diag_eq {
+        ($diag:expr, (($line:literal, $col:literal), $code:literal)) => {
+            assert_diag_eq!($diag, (($line, $col), ($line, $col), $code))
+        };
+
+        ($diag:expr, (($line1:literal, $col1:literal), ($line2:literal, $col2:literal), $code:literal)) => {
+            // Check that the codes match.
+            let code = $diag
+                .code()
+                .expect("Diagnostic should have a code.")
+                .to_string()
+                .strip_prefix("shebling::")
+                .expect("All codes should start with shebling::")
+                .to_owned();
+            ::pretty_assertions::assert_str_eq!(code, $code);
+
+            // Check the range coordinates.
+            let start = $diag.range().start;
+            let end = $diag.range().end;
+            ::pretty_assertions::assert_eq!(start.line, $line1);
+            ::pretty_assertions::assert_eq!(start.column, $col1);
+            ::pretty_assertions::assert_eq!(end.line, $line2);
+            ::pretty_assertions::assert_eq!(end.column, $col2);
+        };
+    }
+
+    macro_rules! assert_parse {
+        (
+            $parser:ident($source:literal) => $unparsed:literal,
+            $res:expr
+            $(, [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $code:literal )),+ ] )?
+        ) => {
+            let (span, res) = $parser(source_to_span($source))
+                .finish()
+                .expect("Parser should succeed.");
+
+            // Verify the result.
+            ::pretty_assertions::assert_eq!(res, $res);
+
+            // Verify the unparsed content.
+            ::pretty_assertions::assert_str_eq!(*span.fragment(), $unparsed);
+
+            // Verify the diagnostics.
+            $($(
+                for diag in span.extra.take_diags() {
+                    assert_diag_eq!(diag, (($line1, $col1), $( ($line2, $col2), )? $code));
+                }
+            )+)?
+        };
+
+        ($parser:ident($source:literal) => Err($line:literal, $col:literal)) => {
+            let err = $parser(source_to_span($source))
+                .finish()
+                .expect_err("Parser should fail.");
+
+            ::pretty_assertions::assert_eq!(err.location.line, $line);
+            ::pretty_assertions::assert_eq!(err.location.column, $col);
+        }
+    }
+}
 
 #[macro_use]
 mod token;
@@ -206,7 +269,7 @@ fn source_to_span(source_code: &str) -> Span {
 }
 
 pub fn parse(source_code: &str) {
-    let diags = trivia::trivia1(source_to_span(source_code))
+    let diags = line_continuation(source_to_span(source_code))
         .finish()
         .unwrap()
         .0

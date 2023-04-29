@@ -54,3 +54,61 @@ fn trivia(span: Span) -> ParseResult<String> {
         },
     )(span)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_comment() {
+        // A Bash comment.
+        assert_parse!(comment("# foo") => "", "# foo");
+
+        // Make sure we stop at the end of a line.
+        assert_parse!(comment("# foo\n") => "\n", "# foo");
+        assert_parse!(comment("# foo\r\n") => "\r\n", "# foo");
+
+        // Not a Bash comment.
+        assert_parse!(comment("// foo") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_line_space() {
+        // Spaces and tabs are fine.
+        assert_parse!(line_space(" ") => "", ' ');
+        assert_parse!(line_space("\t") => "", '\t');
+
+        // Parse unicode spaces but emit warning.
+        assert_parse!(line_space("\u{A0}") => "", ' ', [((1, 1), (1, 2), "unichar")]);
+
+        // Not a space.
+        assert_parse!(line_space("\n") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_trivia() {
+        // It's fine if there's nothing to parse.
+        assert_parse!(trivia("") => "", "");
+        assert_parse!(trivia("foo") => "foo", "");
+
+        // Just space.
+        assert_parse!(trivia(" \t ") => "", " \t ");
+
+        // Just a comment.
+        assert_parse!(trivia("# foo") => "", "# foo");
+
+        // Allow comments to have line continuations if they're not preceded by one.
+        assert_parse!(trivia("# foo \\\n") => "\n", "# foo \\");
+
+        // Comments without line continuations are okay.
+        assert_parse!(trivia(" \\\n# foo") => "", " # foo");
+
+        // Warn when the comment tries to have a line continuation.
+        assert_parse!(
+            trivia(" \\\n# foo \\\n") => "\n",
+            " # foo \\",
+            [((2, 8), "misplaced_char")]
+        );
+    }
+
+}

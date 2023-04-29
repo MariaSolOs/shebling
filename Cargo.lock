@@ -561,6 +561,7 @@ dependencies = [
  "miette",
  "nom",
  "nom_locate",
+ "pretty_assertions",
  "shebling-codegen",
  "thiserror",
 ]
