@@ -24,8 +24,9 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
+    // TODO: Use miette here.
     match fs::read_to_string(&args.path) {
-        Ok(source) => shebling::run(&source),
+        Ok(source_code) => shebling_parser::parse(&source_code),
         Err(err) => {
             let mut cmd = Args::command();
             cmd.error(

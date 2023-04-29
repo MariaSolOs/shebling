@@ -149,3 +149,6 @@ where
     value((), parser)
 }
 // endregion
+
+pub fn parse(source_code: &str) {
+}
