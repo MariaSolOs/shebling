@@ -55,6 +55,13 @@ fn trivia(span: Span) -> ParseResult<String> {
     )(span)
 }
 
+fn trivia1(span: Span) -> ParseResult<String> {
+    context(
+        "expected whitespace!",
+        verify(trivia, |trivia: &str| !trivia.is_empty()),
+    )(span)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,4 +118,13 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_trivia1() {
+        // Non-empty space.
+        assert_parse!(trivia1(" ") => "", " ");
+
+        // The parsed output cannot be empty.
+        assert_parse!(trivia1("") => Err((1, 1), Notes: [((1, 1), "expected whitespace")]));
+        assert_parse!(trivia1("foo") => Err((1, 1), Notes: [((1, 1), "expected whitespace")]));
+    }
 }

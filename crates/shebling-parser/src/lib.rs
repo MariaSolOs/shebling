@@ -74,13 +74,33 @@ mod tests {
         };
 
         ($parser:ident($source:literal) => Err($line:literal, $col:literal)) => {
+            assert_parse!($parser($source) => Err(($line, $col), Notes: []));
+        };
+
+        ($parser:ident($source:literal) => Err(
+            ($line1:literal, $col1:literal),
+            Notes: [ $( (($line2:literal, $col2:literal), $note:literal) ),* ]
+        )) => {
             let err = $parser(source_to_span($source))
                 .finish()
                 .expect_err("Parser should fail.");
 
-            ::pretty_assertions::assert_eq!(err.location.line, $line);
-            ::pretty_assertions::assert_eq!(err.location.column, $col);
-        }
+            // Check the error location.
+            ::pretty_assertions::assert_eq!(err.location.line, $line1);
+            ::pretty_assertions::assert_eq!(err.location.column, $col1);
+
+            // For flexibility, just check that the notes have the expected messages.
+            let mut notes = err.notes.into_iter();
+            $(
+                let note = notes.next().expect("Expected a parser note.");
+                let (note, location) = (note.note, note.location);
+                ::pretty_assertions::assert_eq!(location.line, $line2);
+                ::pretty_assertions::assert_eq!(location.column, $col2);
+                assert!(note.contains($note), "Expected \"{}\" to contain \"{}\"", note, $note);
+            )*
+            let last_note = notes.next();
+            assert!(last_note.is_none(), "There's a note left: {:#?}", last_note);
+        };
     }
 }
 
