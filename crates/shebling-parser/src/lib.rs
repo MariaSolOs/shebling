@@ -40,8 +40,7 @@ mod tests {
             ::pretty_assertions::assert_str_eq!(code, $code);
 
             // Check the range coordinates.
-            let start = $diag.range().start;
-            let end = $diag.range().end;
+            let Range { start, end } = $diag.range();
             ::pretty_assertions::assert_eq!(start.line, $line1);
             ::pretty_assertions::assert_eq!(start.column, $col1);
             ::pretty_assertions::assert_eq!(end.line, $line2);
@@ -53,7 +52,7 @@ mod tests {
         (
             $parser:ident($source:literal) => $unparsed:literal,
             $res:expr
-            $(, [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $code:literal )),+ ] )?
+            $(, [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $code:literal) ),+ ] )?
         ) => {
             let (span, res) = $parser(source_to_span($source))
                 .finish()
@@ -68,38 +67,67 @@ mod tests {
             // Verify the diagnostics.
             $($(
                 for diag in span.extra.take_diags() {
-                    assert_diag_eq!(diag, (($line1, $col1), $( ($line2, $col2), )? $code));
+                    assert_diag_eq!(diag, (($line1, $col1), $(($line2, $col2),)? $code));
                 }
             )+)?
         };
 
         ($parser:ident($source:literal) => Err($line:literal, $col:literal)) => {
-            assert_parse!($parser($source) => Err(($line, $col), Notes: []));
+            assert_parse!($parser($source) => Err(($line, $col), Notes: [], Diags: []));
         };
 
         ($parser:ident($source:literal) => Err(
-            ($line1:literal, $col1:literal),
-            Notes: [ $( (($line2:literal, $col2:literal), $note:literal) ),* ]
+            ($line:literal, $col:literal),
+            Notes: [ $( (($line1:literal, $col1:literal), $note:literal) ),+ ]
+        )) => {
+            assert_parse!($parser($source) => Err(
+                ($line, $col),
+                Notes: [ $( (($line1, $col1), $note) ),+ ],
+                Diags: []
+            ));
+        };
+
+        ($parser:ident($source:literal) => Err(
+            ($line:literal, $col:literal),
+            Diags: [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $code:literal) ),+ ]
+        )) => {
+            assert_parse!($parser($source) => Err(
+                ($line, $col),
+                Notes: [],
+                Diags: [ $( (($line1, $col1), $(($line2, $col2),)? $code) ),+ ]
+            ));
+        };
+
+        ($parser:ident($source:literal) => Err(
+            ($line:literal, $col:literal),
+            Notes: [ $( (($line1:literal, $col1:literal), $note:literal) ),* ],
+            Diags: [ $( (($line2:literal, $col2:literal), $(($line3:literal, $col3:literal),)? $code:literal) ),* ]
         )) => {
             let err = $parser(source_to_span($source))
                 .finish()
                 .expect_err("Parser should fail.");
 
             // Check the error location.
-            ::pretty_assertions::assert_eq!(err.location.line, $line1);
-            ::pretty_assertions::assert_eq!(err.location.column, $col1);
+            ::pretty_assertions::assert_eq!(err.location.line, $line);
+            ::pretty_assertions::assert_eq!(err.location.column, $col);
 
             // For flexibility, just check that the notes have the expected messages.
             let mut notes = err.notes.into_iter();
             $(
-                let note = notes.next().expect("Expected a parser note.");
-                let (note, location) = (note.note, note.location);
-                ::pretty_assertions::assert_eq!(location.line, $line2);
-                ::pretty_assertions::assert_eq!(location.column, $col2);
+                let ParseErrorNote { note, location } = notes.next().expect("Expected a parser note.");
+                ::pretty_assertions::assert_eq!(location.line, $line1);
+                ::pretty_assertions::assert_eq!(location.column, $col1);
                 assert!(note.contains($note), "Expected \"{}\" to contain \"{}\"", note, $note);
             )*
             let last_note = notes.next();
             assert!(last_note.is_none(), "There's a note left: {:#?}", last_note);
+
+            // Check the diagnostics.
+            $(
+                for diag in err.diags {
+                    assert_diag_eq!(diag, (($line2, $col2), $(($line3, $col3),)? $code));
+                }
+            )*
         };
     }
 }
@@ -209,6 +237,8 @@ enum ParseDiagnostic {
 }
 
 impl ParseDiagnostic {
+    // TODO: Try to find an agreement with miette so that we can still
+    // easily access line/column info from a source span.
     fn range(&self) -> &Range {
         match self {
             Self::MisplacedChar(_, range, _) | Self::Unichar(_, range) => range,
@@ -306,6 +336,7 @@ pub fn parse(source_code: &str) {
     for diag in diags {
         println!(
             "{:?}",
+            // TODO: Include file name.
             Report::new(diag).with_source_code(Arc::clone(&source_code))
         );
     }
