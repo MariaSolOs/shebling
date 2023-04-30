@@ -57,3 +57,7 @@ where
 fn parse_token<'a, T: Token>(token: T) -> impl FnMut(Span<'a>) -> ParseResult<T> {
     value(token, tag(token.token()))
 }
+
+impl ParseToken for BinOp {}
+
+impl ParseToken for UnOp {}

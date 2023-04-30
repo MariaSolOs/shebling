@@ -106,8 +106,10 @@ mod tests {
 
 #[macro_use]
 mod token;
+mod ast;
+pub(crate) use ast::*;
 
-mod expr;
+mod expansion;
 
 mod quoted;
 pub(crate) use quoted::line_continuation;

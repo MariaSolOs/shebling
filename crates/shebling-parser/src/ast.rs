@@ -1,5 +1,6 @@
-use crate::token::ParseToken;
+use shebling_codegen::{from_structs, New};
 
+// region: Binary and unary expressions.
 tokenizable! {
     enum BinOp {
         /// Addition operator.
@@ -69,7 +70,15 @@ tokenizable! {
     }
 }
 
-impl ParseToken for BinOp {}
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct BinExpr<O, L, R = L> {
+    #[new(into)]
+    left: Box<L>,
+    #[new(into)]
+    right: Box<R>,
+    #[new(into)]
+    op: O,
+}
 
 tokenizable! {
     enum UnOp {
@@ -88,4 +97,11 @@ tokenizable! {
     }
 }
 
-impl ParseToken for UnOp {}
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct UnExpr<O, E> {
+    #[new(into)]
+    expr: Box<E>,
+    #[new(into)]
+    op: O,
+}
+// endregion
