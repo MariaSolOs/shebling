@@ -1,5 +1,5 @@
 // TODO: Remove this after development.
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
 use miette::{Diagnostic, Report};
 // We import nom's parsers here so that we don't need to import
@@ -8,10 +8,10 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag},
     character::complete::{char, newline, one_of},
-    combinator::{map, opt, recognize, value, verify},
+    combinator::{consumed, into, map, not, opt, peek, recognize, value, verify},
     error::context,
-    multi::{many0, many1},
-    sequence::{pair, preceded, tuple},
+    multi::{many0, many1, separated_list0},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Finish,
 };
 use nom_locate::position;

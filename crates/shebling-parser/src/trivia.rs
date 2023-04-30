@@ -17,6 +17,11 @@ fn comment(span: Span) -> ParseResult<String> {
     recognize_string(pair(char('#'), is_not("\r\n")))(span)
 }
 
+fn line_ending(span: Span) -> ParseResult<char> {
+    // TODO: readPendingHereDocs
+    preceded(opt(carriage_return), newline)(span)
+}
+
 fn line_space(span: Span) -> ParseResult<char> {
     alt((one_of(" \t"), |span| {
         let (span, (_, range)) = ranged(one_of(UNISPACES))(span)?;
@@ -74,6 +79,10 @@ fn trivia1(span: Span) -> ParseResult<String> {
     )(span)
 }
 
+fn whitespace(span: Span) -> ParseResult<char> {
+    alt((line_space, carriage_return, line_ending))(span)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,6 +107,21 @@ mod tests {
 
         // Not a Bash comment.
         assert_parse!(comment("// foo") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_line_ending() {
+        // A new line is fine.
+        assert_parse!(line_ending("\n") => "", '\n');
+
+        // Parse CRLF but warn about the carriage return.
+        assert_parse!(line_ending("\r\n") => "", '\n', [((1, 1), (1, 2), "misplaced_char")]);
+
+        // Missing the new line.
+        assert_parse!(line_ending("\r") => Err((1, 2), Diags: [((1, 1), (1, 2), "misplaced_char")]));
+
+        // Not a new line at all.
+        assert_parse!(line_ending("\t") => Err(1, 1));
     }
 
     #[test]
