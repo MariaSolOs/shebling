@@ -324,7 +324,7 @@ fn source_to_span(source_code: &str) -> Span {
     nom_locate::LocatedSpan::new_extra(source_code, context)
 }
 
-pub fn parse(source_code: &str) {
+pub fn parse(file_path: impl AsRef<str>, source_code: &str) {
     let diags = line_continuation(source_to_span(source_code))
         .finish()
         .unwrap()
@@ -332,7 +332,7 @@ pub fn parse(source_code: &str) {
         .extra
         .take_diags();
 
-    let source_code: Arc<str> = source_code.into();
+    let source_code = Arc::new(miette::NamedSource::new(file_path, source_code.to_owned()));
     for diag in diags {
         println!(
             "{:?}",
