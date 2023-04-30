@@ -10,7 +10,7 @@ fn backslash(span: Span) -> ParseResult<char> {
 fn double_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(DOUBLE_UNIQUOTES))(span)?;
     span.extra
-        .diag(ParseDiagnostic::Unichar("double quote", range));
+        .diag(ParseDiagnostic::new(ParseDiagnosticKind::Unichar).label("double quote", range));
 
     Ok((span, quote))
 }
@@ -22,7 +22,7 @@ pub(crate) fn line_continuation(span: Span) -> ParseResult<()> {
 fn single_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(SINGLE_UNIQUOTES))(span)?;
     span.extra
-        .diag(ParseDiagnostic::Unichar("single quote", range));
+        .diag(ParseDiagnostic::new(ParseDiagnosticKind::Unichar).label("single quote", range));
 
     Ok((span, quote))
 }

@@ -1,7 +1,7 @@
 // TODO: Remove this after development.
 #![allow(dead_code, unused_imports)]
 
-use miette::{Diagnostic, Report};
+use miette::{Diagnostic, Report, Severity};
 // We import nom's parsers here so that we don't need to import
 // them in every file.
 use nom::{
@@ -16,8 +16,8 @@ use nom::{
 };
 use nom_locate::position;
 use shebling_codegen::New;
-use std::cell::RefCell;
 use std::{borrow::Borrow, sync::Arc};
+use std::{cell::RefCell, fmt};
 use thiserror::Error;
 
 #[cfg(test)]
@@ -114,10 +114,10 @@ mod tests {
             // For flexibility, just check that the notes have the expected messages.
             let mut notes = err.notes.into_iter();
             $(
-                let ParseErrorNote { note, location } = notes.next().expect("Expected a parser note.");
-                ::pretty_assertions::assert_eq!(location.line, $line1);
-                ::pretty_assertions::assert_eq!(location.column, $col1);
-                assert!(note.contains($note), "Expected \"{}\" to contain \"{}\"", note, $note);
+                let LabeledRange { range, label } = notes.next().expect("Expected a parser note.");
+                ::pretty_assertions::assert_eq!(range.start.line, $line1);
+                ::pretty_assertions::assert_eq!(range.start.column, $col1);
+                assert!(label.contains($note), "Expected \"{}\" to contain \"{}\"", label, $note);
             )*
             let last_note = notes.next();
             assert!(last_note.is_none(), "There's a note left: {:#?}", last_note);
@@ -191,10 +191,10 @@ impl<L: Into<Location>> From<L> for Range {
 
 impl From<Range> for miette::SourceSpan {
     fn from(value: Range) -> Self {
-        let offset = value.start.offset;
-        let len = value.end.offset - offset;
+        let start = value.start.offset;
+        let end = value.end.offset;
 
-        (offset, len).into()
+        (start, end).into()
     }
 }
 // endregion
@@ -202,14 +202,22 @@ impl From<Range> for miette::SourceSpan {
 // region: Parsing state.
 type ParseResult<'a, R> = nom::IResult<Span<'a>, R, ParseError>;
 
+#[derive(Clone, Debug, Diagnostic, Error)]
+#[error("{label}")]
+struct LabeledRange {
+    #[label("{label}")]
+    range: Range,
+    label: &'static str,
+}
+
 #[derive(Clone, Debug)]
 struct ParseContext {
     diags: RefCell<Vec<ParseDiagnostic>>,
 }
 
 impl ParseContext {
-    fn diag(&self, diag: ParseDiagnostic) {
-        self.diags.borrow_mut().push(diag);
+    fn diag(&self, builder: ParseDiagnosticBuilder) {
+        self.diags.borrow_mut().push(builder.build());
     }
 
     fn take_diags(&self) -> Vec<ParseDiagnostic> {
@@ -217,19 +225,88 @@ impl ParseContext {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+#[error("{kind}")]
+struct ParseDiagnostic {
+    kind: ParseDiagnosticKind,
+    labels: Vec<LabeledRange>,
+    help: Option<&'static str>,
+}
+
+impl Diagnostic for ParseDiagnostic {
+    fn code<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        self.kind.code()
+    }
+
+    fn severity(&self) -> Option<Severity> {
+        self.kind.severity()
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        self.help
+            .map(|help| Box::new(help) as Box<dyn fmt::Display>)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
+        Some(Box::new(self.labels.iter().map(|label| {
+            miette::LabeledSpan::new_with_span(Some(label.label.into()), label.range)
+        })))
+    }
+}
+
+impl ParseDiagnostic {
+    fn new(kind: ParseDiagnosticKind) -> ParseDiagnosticBuilder {
+        ParseDiagnosticBuilder {
+            kind,
+            labels: Vec::new(),
+            help: None,
+        }
+    }
+
+    fn range(&self) -> &Range {
+        &self
+            .labels
+            .first()
+            .expect("Diagnostics should have at least one label.")
+            .range
+    }
+}
+
+struct ParseDiagnosticBuilder {
+    kind: ParseDiagnosticKind,
+    labels: Vec<LabeledRange>,
+    help: Option<&'static str>,
+}
+
+impl ParseDiagnosticBuilder {
+    fn label(mut self, label: &'static str, range: Range) -> Self {
+        self.labels.push(LabeledRange { range, label });
+        self
+    }
+
+    fn help(mut self, help: &'static str) -> Self {
+        self.help = Some(help);
+        self
+    }
+
+    fn build(self) -> ParseDiagnostic {
+        ParseDiagnostic {
+            kind: self.kind,
+            labels: self.labels,
+            help: self.help,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Diagnostic, Error)]
-enum ParseDiagnostic {
-    #[error("Incorrect escape sequence!")]
+enum ParseDiagnosticKind {
+    #[error("Bad escaping!")]
     #[diagnostic(code(shebling::bad_escape), severity("warning"))]
-    BadEscape(&'static str, #[label("{0}")] Range),
+    BadEscape,
 
     #[error("Unexpected character!")]
     #[diagnostic(code(shebling::unexpected_char), severity("warning"))]
-    UnexpectedChar(
-        &'static str,
-        #[label("{0}")] Range,
-        #[help] Option<&'static str>,
-    ),
+    UnexpectedChar,
 
     #[error("Unicode character!")]
     #[diagnostic(
@@ -237,19 +314,7 @@ enum ParseDiagnostic {
         help("Delete and retype it."),
         severity("warning")
     )]
-    Unichar(&'static str, #[label("unicode {0}")] Range),
-}
-
-impl ParseDiagnostic {
-    // TODO: Try to find an agreement with miette so that we can still
-    // easily access line/column info from a source span.
-    fn range(&self) -> &Range {
-        match self {
-            Self::BadEscape(_, range)
-            | Self::UnexpectedChar(_, range, _)
-            | Self::Unichar(_, range) => range,
-        }
-    }
+    Unichar,
 }
 
 #[derive(Debug, Diagnostic, Error)]
@@ -259,7 +324,7 @@ struct ParseError {
     #[label("stopped here")]
     location: Location,
     #[related]
-    notes: Vec<ParseErrorNote>,
+    notes: Vec<LabeledRange>,
     diags: Vec<ParseDiagnostic>,
 }
 
@@ -279,21 +344,13 @@ impl nom::error::ParseError<Span<'_>> for ParseError {
 
 impl nom::error::ContextError<Span<'_>> for ParseError {
     fn add_context(input: Span<'_>, ctx: &'static str, mut other: Self) -> Self {
-        other.notes.push(ParseErrorNote {
-            location: Location::from(input),
-            note: ctx,
+        other.notes.push(LabeledRange {
+            range: Range::from(input),
+            label: ctx,
         });
 
         other
     }
-}
-
-#[derive(Debug, Diagnostic, Error)]
-#[error("{note}")]
-struct ParseErrorNote {
-    #[label("{note}")]
-    location: Location,
-    note: &'static str,
 }
 // endregion
 
