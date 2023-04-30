@@ -43,10 +43,9 @@ fn trivia(span: Span) -> ParseResult<String> {
         if let Some(comment) = comment {
             // Line continuations at the end of a comment are not actually line continuations.
             if comment.ends_with('\\') {
-                span.extra.diag(ParseDiagnostic::UnexpectedChar(
+                span.extra.diag(ParseDiagnostic::BadEscape(
                     "this backslash is part of a comment.",
                     Range::from(&span),
-                    None,
                 ));
             }
 
@@ -159,7 +158,7 @@ mod tests {
         assert_parse!(
             trivia(" \\\n# foo \\\n") => "\n",
             " # foo \\",
-            [((2, 8), "unexpected_char")]
+            [((2, 8), "bad_escape")]
         );
     }
 

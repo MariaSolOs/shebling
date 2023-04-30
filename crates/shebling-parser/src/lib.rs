@@ -219,6 +219,10 @@ impl ParseContext {
 
 #[derive(Clone, Debug, Diagnostic, Error)]
 enum ParseDiagnostic {
+    #[error("Incorrect escape sequence!")]
+    #[diagnostic(code(shebling::bad_escape), severity("warning"))]
+    BadEscape(&'static str, #[label("{0}")] Range),
+
     #[error("Unexpected character!")]
     #[diagnostic(code(shebling::unexpected_char), severity("warning"))]
     UnexpectedChar(
@@ -241,7 +245,9 @@ impl ParseDiagnostic {
     // easily access line/column info from a source span.
     fn range(&self) -> &Range {
         match self {
-            Self::UnexpectedChar(_, range, _) | Self::Unichar(_, range) => range,
+            Self::BadEscape(_, range)
+            | Self::UnexpectedChar(_, range, _)
+            | Self::Unichar(_, range) => range,
         }
     }
 }
