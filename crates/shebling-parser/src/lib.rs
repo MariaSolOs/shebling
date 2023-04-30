@@ -193,7 +193,11 @@ impl ParseContext {
 enum ParseDiagnostic {
     #[error("Misplaced character!")]
     #[diagnostic(code(shebling::misplaced_char), severity("warning"))]
-    MisplacedChar(&'static str, #[label("{0}")] Range),
+    MisplacedChar(
+        &'static str,
+        #[label("{0}")] Range,
+        #[help] Option<&'static str>,
+    ),
 
     #[error("Unicode character!")]
     #[diagnostic(
@@ -207,7 +211,7 @@ enum ParseDiagnostic {
 impl ParseDiagnostic {
     fn range(&self) -> &Range {
         match self {
-            Self::MisplacedChar(_, range) | Self::Unichar(_, range) => range,
+            Self::MisplacedChar(_, range, _) | Self::Unichar(_, range) => range,
         }
     }
 }

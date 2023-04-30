@@ -2,6 +2,17 @@ use super::*;
 
 const UNISPACES: &str = "\u{A0}\u{200B}";
 
+fn carriage_return(span: Span) -> ParseResult<char> {
+    let (span, (cr, range)) = ranged(char('\r'))(span)?;
+    span.extra.diag(ParseDiagnostic::MisplacedChar(
+        "literal carriage return",
+        range,
+        Some("Try running the script through `tr -d '\\r'`."),
+    ));
+
+    Ok((span, cr))
+}
+
 fn comment(span: Span) -> ParseResult<String> {
     recognize_string(pair(char('#'), is_not("\r\n")))(span)
 }
@@ -30,6 +41,7 @@ fn trivia(span: Span) -> ParseResult<String> {
                 span.extra.diag(ParseDiagnostic::MisplacedChar(
                     "this backslash is part of a comment.",
                     Range::from(&span),
+                    None,
                 ));
             }
 
@@ -65,6 +77,15 @@ fn trivia1(span: Span) -> ParseResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_carriage_return() {
+        // Check parsed CR and warning.
+        assert_parse!(carriage_return("\r") => "", '\r', [((1, 1), (1, 2), "misplaced_char")]);
+
+        // Not a CR.
+        assert_parse!(carriage_return("\n") => Err(1, 1));
+    }
 
     #[test]
     fn test_comment() {
