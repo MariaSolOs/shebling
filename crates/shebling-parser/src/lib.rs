@@ -219,9 +219,9 @@ impl ParseContext {
 
 #[derive(Clone, Debug, Diagnostic, Error)]
 enum ParseDiagnostic {
-    #[error("Misplaced character!")]
-    #[diagnostic(code(shebling::misplaced_char), severity("warning"))]
-    MisplacedChar(
+    #[error("Unexpected character!")]
+    #[diagnostic(code(shebling::unexpected_char), severity("warning"))]
+    UnexpectedChar(
         &'static str,
         #[label("{0}")] Range,
         #[help] Option<&'static str>,
@@ -241,7 +241,7 @@ impl ParseDiagnostic {
     // easily access line/column info from a source span.
     fn range(&self) -> &Range {
         match self {
-            Self::MisplacedChar(_, range, _) | Self::Unichar(_, range) => range,
+            Self::UnexpectedChar(_, range, _) | Self::Unichar(_, range) => range,
         }
     }
 }

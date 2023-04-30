@@ -4,7 +4,7 @@ const UNISPACES: &str = "\u{A0}\u{200B}";
 
 fn carriage_return(span: Span) -> ParseResult<char> {
     let (span, (cr, range)) = ranged(char('\r'))(span)?;
-    span.extra.diag(ParseDiagnostic::MisplacedChar(
+    span.extra.diag(ParseDiagnostic::UnexpectedChar(
         "literal carriage return",
         range,
         Some("Try running the script through `tr -d '\\r'`."),
@@ -43,7 +43,7 @@ fn trivia(span: Span) -> ParseResult<String> {
         if let Some(comment) = comment {
             // Line continuations at the end of a comment are not actually line continuations.
             if comment.ends_with('\\') {
-                span.extra.diag(ParseDiagnostic::MisplacedChar(
+                span.extra.diag(ParseDiagnostic::UnexpectedChar(
                     "this backslash is part of a comment.",
                     Range::from(&span),
                     None,
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn test_carriage_return() {
         // Check parsed CR and warning.
-        assert_parse!(carriage_return("\r") => "", '\r', [((1, 1), (1, 2), "misplaced_char")]);
+        assert_parse!(carriage_return("\r") => "", '\r', [((1, 1), (1, 2), "unexpected_char")]);
 
         // Not a CR.
         assert_parse!(carriage_return("\n") => Err(1, 1));
@@ -115,10 +115,10 @@ mod tests {
         assert_parse!(line_ending("\n") => "", '\n');
 
         // Parse CRLF but warn about the carriage return.
-        assert_parse!(line_ending("\r\n") => "", '\n', [((1, 1), (1, 2), "misplaced_char")]);
+        assert_parse!(line_ending("\r\n") => "", '\n', [((1, 1), (1, 2), "unexpected_char")]);
 
         // Missing the new line.
-        assert_parse!(line_ending("\r") => Err((1, 2), Diags: [((1, 1), (1, 2), "misplaced_char")]));
+        assert_parse!(line_ending("\r") => Err((1, 2), Diags: [((1, 1), (1, 2), "unexpected_char")]));
 
         // Not a new line at all.
         assert_parse!(line_ending("\t") => Err(1, 1));
@@ -159,7 +159,7 @@ mod tests {
         assert_parse!(
             trivia(" \\\n# foo \\\n") => "\n",
             " # foo \\",
-            [((2, 8), "misplaced_char")]
+            [((2, 8), "unexpected_char")]
         );
     }
 
