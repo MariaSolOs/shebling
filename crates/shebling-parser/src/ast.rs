@@ -145,3 +145,11 @@ pub(crate) struct UnExpr<O, E> {
     op: O,
 }
 // endregion
+
+// region: Quoted strings.
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct SingleQuoted {
+    #[new(into)]
+    string: String,
+}
+// endregion

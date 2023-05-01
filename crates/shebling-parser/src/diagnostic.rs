@@ -103,6 +103,10 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::bad_escape))]
     BadEscape,
 
+    #[error("Unclosed string!")]
+    #[diagnostic(code(shebling::unclosed_string))]
+    UnclosedString,
+
     #[error("Unexpected character!")]
     #[diagnostic(code(shebling::unexpected_char))]
     UnexpectedChar,

@@ -39,10 +39,10 @@ mod tests {
 
             // Check the range coordinates.
             let $crate::Range { start, end } = $diag.range();
-            ::pretty_assertions::assert_eq!(start.line, $line1);
-            ::pretty_assertions::assert_eq!(start.column, $col1);
-            ::pretty_assertions::assert_eq!(end.line, $line2);
-            ::pretty_assertions::assert_eq!(end.column, $col2);
+            ::pretty_assertions::assert_eq!(start.line, $line1, "Start column: {}", start.line);
+            ::pretty_assertions::assert_eq!(start.column, $col1, "Start column: {}", start.column);
+            ::pretty_assertions::assert_eq!(end.line, $line2, "End line: {}", end.line);
+            ::pretty_assertions::assert_eq!(end.column, $col2, "End column: {}", end.column);
         };
     }
 
