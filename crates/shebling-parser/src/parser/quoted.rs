@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn test_double_uniquote() {
         // A legit uniquote.
-        assert_parse!(double_uniquote("\u{201C}") => "", '\u{201C}', [((1, 1), (1, 2), "unichar")]);
+        assert_parse!(double_uniquote("\u{201C}") => "", '\u{201C}', [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]);
 
         // Not a uniquote.
         assert_parse!(double_uniquote("\"") => Err(1, 1));
@@ -43,7 +43,7 @@ mod tests {
     #[test]
     fn test_single_uniquote() {
         // A legit uniquote.
-        assert_parse!(single_uniquote("\u{2018}") => "", '\u{2018}', [((1, 1), (1, 2), "unichar")]);
+        assert_parse!(single_uniquote("\u{2018}") => "", '\u{2018}', [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]);
 
         // Not a uniquote.
         assert_parse!(single_uniquote("'") => Err(1, 1));

@@ -98,36 +98,5 @@ pub fn parse(file_path: impl AsRef<str>, source_code: &str) {
     // HACK: When reporting errors, add a newline to the end of the source
     // so that miette can highlight the last character.
 
-    // let diags = parser::single_quoted(source_to_span(source_code))
-    //     .finish()
-    //     .unwrap()
-    //     .0
-    //     .extra
-    //     .take_diags();
-
-    // let source_code = Arc::new(miette::NamedSource::new(file_path, source_code.to_owned()));
-    // for diag in diags {
-    //     println!(
-    //         "{:?}",
-    //         Report::new(diag).with_source_code(Arc::clone(&source_code))
-    //     );
-    // }
-
-    // let err = line_continuation(source_to_span(source_code))
-    //     .finish()
-    //     .unwrap_err();
-    // let source_code = Arc::new(miette::NamedSource::new(
-    //     file_path,
-    //     source_code.to_owned() + "\n",
-    // ));
-    // println!(
-    //     "{:?}",
-    //     Report::new(err).with_source_code(Arc::clone(&source_code))
-    // );
-    // for diag in err.diags {
-    //     println!(
-    //         "{:?}",
-    //         Report::new(diag).with_source_code(Arc::clone(&source_code))
-    //     );
-    // }
+    parser::test(file_path, source_code);
 }

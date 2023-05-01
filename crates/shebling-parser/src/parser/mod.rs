@@ -23,19 +23,19 @@ use nom_locate::position;
 #[macro_use]
 mod tests {
     macro_rules! assert_diag_eq {
-        ($diag:expr, (($line:literal, $col:literal), $code:literal)) => {
-            assert_diag_eq!($diag, (($line, $col), ($line, $col), $code))
+        ($diag:expr, (($line:literal, $col:literal), $kind:path)) => {
+            assert_diag_eq!($diag, (($line, $col), ($line, $col), $kind))
         };
 
-        ($diag:expr, (($line1:literal, $col1:literal), ($line2:literal, $col2:literal), $code:literal)) => {
+        ($diag:expr, (($line1:literal, $col1:literal), ($line2:literal, $col2:literal), $kind:path)) => {
             // Check that the codes match.
-            let code = ::miette::Diagnostic::code($diag)
+            let actual_code = ::miette::Diagnostic::code($diag)
                 .expect("Diagnostic should have a code.")
-                .to_string()
-                .strip_prefix("shebling::")
-                .expect("All codes should start with shebling::")
-                .to_owned();
-            ::pretty_assertions::assert_str_eq!(code, $code);
+                .to_string();
+            let expected_code = ::miette::Diagnostic::code(&$kind)
+                .expect("Diagnostic should have a code.")
+                .to_string();
+            ::pretty_assertions::assert_str_eq!(actual_code, expected_code);
 
             // Check the range coordinates.
             let $crate::Range { start, end } = $diag.range();
@@ -50,7 +50,7 @@ mod tests {
         (
             $parser:ident($source:literal) => $unparsed:literal,
             $res:expr
-            $(, [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $code:literal) ),+ ] )?
+            $(, [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $kind:path) ),+ ] )?
         ) => {
             let (span, res) = $parser($crate::source_to_span($source))
                 .finish()
@@ -65,7 +65,7 @@ mod tests {
             // Verify the diagnostics.
             $($(
                 for diag in span.extra.take_diags() {
-                    assert_diag_eq!(&diag, (($line1, $col1), $(($line2, $col2),)? $code));
+                    assert_diag_eq!(&diag, (($line1, $col1), $(($line2, $col2),)? $kind));
                 }
             )+)?
         };
@@ -87,19 +87,19 @@ mod tests {
 
         ($parser:ident($source:literal) => Err(
             ($line:literal, $col:literal),
-            Diags: [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $code:literal) ),+ ]
+            Diags: [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $kind:path) ),+ ]
         )) => {
             assert_parse!($parser($source) => Err(
                 ($line, $col),
                 Notes: [],
-                Diags: [ $( (($line1, $col1), $(($line2, $col2),)? $code) ),+ ]
+                Diags: [ $( (($line1, $col1), $(($line2, $col2),)? $kind) ),+ ]
             ));
         };
 
         ($parser:ident($source:literal) => Err(
             ($line:literal, $col:literal),
             Notes: [ $( (($line1:literal, $col1:literal), $note:literal) ),* ],
-            Diags: [ $( (($line2:literal, $col2:literal), $(($line3:literal, $col3:literal),)? $code:literal) ),* ]
+            Diags: [ $( (($line2:literal, $col2:literal), $(($line3:literal, $col3:literal),)? $kind:path) ),* ]
         )) => {
             let err = $parser($crate::source_to_span($source))
                 .finish()
@@ -124,7 +124,7 @@ mod tests {
             // Check the diagnostics.
             $(
                 for diag in err.diags() {
-                    assert_diag_eq!(diag, (($line2, $col2), $(($line3, $col3),)? $code));
+                    assert_diag_eq!(diag, (($line2, $col2), $(($line3, $col3),)? $kind));
                 }
             )*
         };
@@ -141,6 +141,50 @@ mod token;
 mod trivia;
 
 type ParseResult<'a, R> = nom::IResult<Span<'a>, R, ParseError>;
+
+// TODO: Remove this test function.
+#[allow(unused_variables, unused_imports)]
+pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
+    use crate::source_to_span;
+    use miette::Report;
+    use std::sync::Arc;
+
+    // let diags: Vec<ParseDiagnostic> = single_quoted(source_to_span(source_code))
+    //     .finish()
+    //     .unwrap()
+    //     .0
+    //     .extra
+    //     .take_diags();
+
+    // let source_code = Arc::new(miette::NamedSource::new(
+    //     file_path,
+    //     source_code.to_owned() + "\n",
+    // ));
+    // for diag in diags {
+    //     println!(
+    //         "{:?}",
+    //         Report::new(diag).with_source_code(Arc::clone(&source_code))
+    //     );
+    // }
+
+    // let err = single_quoted(source_to_span(source_code))
+    //     .finish()
+    //     .unwrap_err();
+    // let source_code = Arc::new(miette::NamedSource::new(
+    //     file_path,
+    //     source_code.to_owned() + "\n",
+    // ));
+    // println!(
+    //     "{:?}",
+    //     Report::new(err).with_source_code(Arc::clone(&source_code))
+    // );
+    // for diag in err.diags {
+    //     println!(
+    //         "{:?}",
+    //         Report::new(diag).with_source_code(Arc::clone(&source_code))
+    //     );
+    // }
+}
 
 // region: Shared utility parsers.
 fn ranged<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<(R, Range)>

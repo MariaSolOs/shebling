@@ -89,7 +89,11 @@ mod tests {
     #[test]
     fn test_carriage_return() {
         // Check parsed CR and warning.
-        assert_parse!(carriage_return("\r") => "", '\r', [((1, 1), (1, 2), "unexpected_char")]);
+        assert_parse!(
+            carriage_return("\r") => "",
+            '\r',
+            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedChar)]
+        );
 
         // Not a CR.
         assert_parse!(carriage_return("\n") => Err(1, 1));
@@ -114,10 +118,17 @@ mod tests {
         assert_parse!(line_ending("\n") => "", '\n');
 
         // Parse CRLF but warn about the carriage return.
-        assert_parse!(line_ending("\r\n") => "", '\n', [((1, 1), (1, 2), "unexpected_char")]);
+        assert_parse!(
+            line_ending("\r\n") => "",
+            '\n',
+            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedChar)]
+        );
 
         // Missing the new line.
-        assert_parse!(line_ending("\r") => Err((1, 2), Diags: [((1, 1), (1, 2), "unexpected_char")]));
+        assert_parse!(line_ending("\r") => Err(
+            (1, 2),
+            Diags: [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedChar)]
+        ));
 
         // Not a new line at all.
         assert_parse!(line_ending("\t") => Err(1, 1));
@@ -130,7 +141,7 @@ mod tests {
         assert_parse!(line_space("\t") => "", '\t');
 
         // Parse unicode spaces but emit warning.
-        assert_parse!(line_space("\u{A0}") => "", ' ', [((1, 1), (1, 2), "unichar")]);
+        assert_parse!(line_space("\u{A0}") => "", ' ', [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]);
 
         // Not a space.
         assert_parse!(line_space("\n") => Err(1, 1));
@@ -158,7 +169,7 @@ mod tests {
         assert_parse!(
             trivia(" \\\n# foo \\\n") => "\n",
             " # foo \\",
-            [((2, 8), "bad_escape")]
+            [((2, 8), ParseDiagnosticKind::BadEscape)]
         );
     }
 
