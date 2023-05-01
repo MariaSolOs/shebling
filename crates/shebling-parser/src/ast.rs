@@ -1,5 +1,6 @@
 use shebling_codegen::{from_structs, New};
 
+// region: Tokens.
 /// Trait for types that represent single tokens, such as keywords
 /// and operators.
 pub(crate) trait Token
@@ -39,6 +40,7 @@ macro_rules! tokenizable {
          }
      };
  }
+// endregion
 
 // region: Binary and unary expressions.
 tokenizable! {
@@ -146,10 +148,129 @@ pub(crate) struct UnExpr<O, E> {
 }
 // endregion
 
+// region: Arithmetic expressions.
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum ArithTerm {
+    BinExpr(ArithBinExpr),
+    Expansion(ArithExpansion),
+    Group(ArithGroup),
+    TriExpr(ArithTriExpr),
+    UnExpr(ArithUnExpr),
+    Variable(Variable),
+}
+
+pub(crate) type ArithBinExpr = BinExpr<BinOp, ArithTerm>;
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct ArithExpansion {
+    sgmts: Vec<WordSgmt>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct ArithGroup {
+    seq: ArithSeq,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct ArithSeq {
+    terms: Vec<ArithTerm>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct ArithTriExpr {
+    #[new(into)]
+    cond: Box<ArithTerm>,
+    #[new(into)]
+    then_branch: Box<ArithTerm>,
+    #[new(into)]
+    else_branch: Box<ArithTerm>,
+}
+
+pub(crate) type ArithUnExpr = UnExpr<UnOp, ArithTerm>;
+// endregion
+
 // region: Quoted strings.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct SingleQuoted {
     #[new(into)]
     string: String,
+}
+// endregion
+
+// region: Words.
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Word {
+    sgmts: Vec<WordSgmt>,
+}
+
+impl Word {
+    pub(crate) fn sgmts(&self) -> &[WordSgmt] {
+        &self.sgmts
+    }
+
+    /// If this [Word] represents a literal string, returns the [Lit].
+    ///
+    /// A word is considered a literal if:
+    /// - The word has a single segment.
+    /// - Such segment is a [WordSgmt::Lit].
+    pub(crate) fn as_lit(&self) -> Option<&Lit> {
+        match &self.sgmts.first() {
+            Some(WordSgmt::Lit(lit)) if self.sgmts.len() == 1 => Some(lit),
+            _ => None,
+        }
+    }
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum WordSgmt {
+    // TODO BackQuoted(BackQuoted),
+    // TODO BraceExpansion(BraceExpansion),
+    // TODO DollarExp(DollarExp),
+    // TODO DoubleQuoted(DoubleQuoted),
+    // TODO Glob(Glob),
+    Lit(Lit),
+    // TODO ProcSub(ProcSub),
+    SingleQuoted(SingleQuoted),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Lit {
+    #[new(into)]
+    value: String,
+}
+
+impl Lit {
+    // TODO: Restrict the access to value?
+    pub(crate) fn value(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct Variable {
+    ident: String,
+    subscripts: Vec<Subscript>,
+}
+
+impl Variable {
+    pub(crate) fn new(ident: impl Into<String>) -> Self {
+        Self::with_subscripts(ident, vec![])
+    }
+
+    pub(crate) fn with_subscripts(ident: impl Into<String>, subscripts: Vec<Subscript>) -> Self {
+        Self {
+            ident: ident.into(),
+            subscripts,
+        }
+    }
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Subscript {
+    // Left unparsed for now.
+    #[new(into)]
+    content: String,
 }
 // endregion

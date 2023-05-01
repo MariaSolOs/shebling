@@ -2,7 +2,7 @@ use crate::Range;
 use std::fmt;
 use thiserror::Error;
 
-type LabeledRange = (&'static str, Range);
+type LabeledRange = (String, Range);
 
 #[derive(Clone, Debug, Error)]
 #[error("{kind}")]
@@ -32,7 +32,7 @@ impl miette::Diagnostic for ParseDiagnostic {
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
         Some(Box::new(self.labels.iter().map(|(label, range)| {
-            miette::LabeledSpan::new_with_span(Some((*label).into()), *range)
+            miette::LabeledSpan::new_with_span(Some(label.into()), *range)
         })))
     }
 }
@@ -72,12 +72,15 @@ pub(super) struct ParseDiagnosticBuilder {
 
 impl ParseDiagnosticBuilder {
     /// Adds a [LabeledRange] to the [ParseDiagnostic].
-    pub(crate) fn label(mut self, label: &'static str, range: impl Into<Range>) -> Self {
-        self.labels.push((label, range.into()));
+    pub(crate) fn label(mut self, label: impl AsRef<str>, range: impl Into<Range>) -> Self {
+        self.labels.push((label.as_ref().into(), range.into()));
         self
     }
 
     /// Sets the help message of the [ParseDiagnostic].
+    ///
+    /// # Panics
+    /// Panics if the diagnostic already has a help message.
     pub(crate) fn help(mut self, help: impl AsRef<str>) -> Self {
         if self.help.is_some() {
             panic!("This diagnostic already has a help message.");
@@ -102,6 +105,10 @@ pub(crate) enum ParseDiagnosticKind {
     #[error("Bad escaping!")]
     #[diagnostic(code(shebling::bad_escape))]
     BadEscape,
+
+    #[error("Bad operator!")]
+    #[diagnostic(code(shebling::bad_operator))]
+    BadOperator,
 
     #[error("Unclosed string!")]
     #[diagnostic(code(shebling::unclosed_string))]

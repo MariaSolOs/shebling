@@ -78,7 +78,7 @@ fn trivia1(span: Span) -> ParseResult<String> {
     )(span)
 }
 
-fn whitespace(span: Span) -> ParseResult<char> {
+pub(super) fn whitespace(span: Span) -> ParseResult<char> {
     alt((line_space, carriage_return, line_ending))(span)
 }
 

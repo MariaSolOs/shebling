@@ -23,11 +23,16 @@ mod tests;
 mod expansion;
 
 mod quoted;
-use quoted::line_continuation;
+use quoted::{line_continuation, single_quoted};
 
 mod token;
+use token::token;
 
 mod trivia;
+use trivia::whitespace;
+
+mod word;
+use word::identifier;
 
 type ParseResult<'a, R> = nom::IResult<Span<'a>, R, ParseError>;
 
@@ -38,7 +43,7 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    // let diags: Vec<ParseDiagnostic> = single_quoted(source_to_span(source_code))
+    // let diags: Vec<ParseDiagnostic> = expansion::arith_seq(source_to_span(source_code))
     //     .finish()
     //     .unwrap()
     //     .0
@@ -76,6 +81,14 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
 }
 
 // region: Shared utility parsers.
+fn lit<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<Lit>
+where
+    P: FnMut(Span<'a>) -> ParseResult<R>,
+    R: Into<String>,
+{
+    map(parser, |res| Lit::new(res.into()))
+}
+
 fn ranged<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<(R, Range)>
 where
     P: FnMut(Span<'a>) -> ParseResult<R>,

@@ -19,7 +19,7 @@ pub(super) fn line_continuation(span: Span) -> ParseResult<()> {
     swallow(pair(backslash, newline))(span)
 }
 
-fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
+pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
     // Parse the opening quote and the string.
     let (span, (start_quote, string)) = pair(
         tag("'"),
