@@ -15,7 +15,7 @@ fn double_uniquote(span: Span) -> ParseResult<char> {
     Ok((span, quote))
 }
 
-pub(crate) fn line_continuation(span: Span) -> ParseResult<()> {
+pub(super) fn line_continuation(span: Span) -> ParseResult<()> {
     swallow(pair(backslash, newline))(span)
 }
 
