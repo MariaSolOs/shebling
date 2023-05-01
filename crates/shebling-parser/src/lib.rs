@@ -60,10 +60,10 @@ impl<L: Into<Location>> From<L> for Range {
 
 impl From<Range> for miette::SourceSpan {
     fn from(value: Range) -> Self {
-        let start = value.start.offset;
-        let end = value.end.offset;
+        let offset = value.start.offset;
+        let len = value.end.offset - offset;
 
-        (start, end).into()
+        (offset, len).into()
     }
 }
 // endregion
