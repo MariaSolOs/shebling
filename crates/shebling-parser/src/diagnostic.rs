@@ -9,7 +9,7 @@ type LabeledRange = (&'static str, Range);
 pub(crate) struct ParseDiagnostic {
     kind: ParseDiagnosticKind,
     labels: Vec<LabeledRange>,
-    help: Option<&'static str>,
+    help: Option<String>,
 }
 
 // This implementation basically wraps the methods in ParseDiagnosticKind,
@@ -26,6 +26,7 @@ impl miette::Diagnostic for ParseDiagnostic {
 
     fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
         self.help
+            .as_deref()
             .map(|help| Box::new(help) as Box<dyn fmt::Display>)
     }
 
@@ -40,10 +41,15 @@ impl ParseDiagnostic {
     /// Creates a new [builder](ParseDiagnosticBuilder) for a diagnostic
     /// of the given [kind](ParseDiagnosticKind).
     pub(crate) fn new(kind: ParseDiagnosticKind) -> ParseDiagnosticBuilder {
+        // Use the help from the kind, if it has one.
+        let help = (&kind as &dyn miette::Diagnostic)
+            .help()
+            .map(|help| help.to_string());
+
         ParseDiagnosticBuilder {
             kind,
             labels: Vec::new(),
-            help: None,
+            help,
         }
     }
 
@@ -61,7 +67,7 @@ impl ParseDiagnostic {
 pub(super) struct ParseDiagnosticBuilder {
     kind: ParseDiagnosticKind,
     labels: Vec<LabeledRange>,
-    help: Option<&'static str>,
+    help: Option<String>,
 }
 
 impl ParseDiagnosticBuilder {
@@ -72,8 +78,12 @@ impl ParseDiagnosticBuilder {
     }
 
     /// Sets the help message of the [ParseDiagnostic].
-    pub(crate) fn help(mut self, help: &'static str) -> Self {
-        self.help = Some(help);
+    pub(crate) fn help(mut self, help: impl AsRef<str>) -> Self {
+        if self.help.is_some() {
+            panic!("This diagnostic already has a help message.");
+        }
+
+        self.help = Some(help.as_ref().into());
         self
     }
 
