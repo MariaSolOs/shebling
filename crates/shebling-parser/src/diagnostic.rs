@@ -21,7 +21,7 @@ impl miette::Diagnostic for ParseDiagnostic {
     }
 
     fn severity(&self) -> Option<miette::Severity> {
-        self.kind.severity()
+        self.kind.severity().or(Some(miette::Severity::Warning))
     }
 
     fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
@@ -100,18 +100,14 @@ impl ParseDiagnosticBuilder {
 #[derive(Clone, Debug, Error, miette::Diagnostic)]
 pub(crate) enum ParseDiagnosticKind {
     #[error("Bad escaping!")]
-    #[diagnostic(code(shebling::bad_escape), severity("warning"))]
+    #[diagnostic(code(shebling::bad_escape))]
     BadEscape,
 
     #[error("Unexpected character!")]
-    #[diagnostic(code(shebling::unexpected_char), severity("warning"))]
+    #[diagnostic(code(shebling::unexpected_char))]
     UnexpectedChar,
 
     #[error("Unicode character!")]
-    #[diagnostic(
-        code(shebling::unichar),
-        help("Delete and retype it."),
-        severity("warning")
-    )]
+    #[diagnostic(code(shebling::unichar), help("Delete and retype it."))]
     Unichar,
 }
