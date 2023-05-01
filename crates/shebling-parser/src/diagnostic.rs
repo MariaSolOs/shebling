@@ -66,8 +66,8 @@ pub(super) struct ParseDiagnosticBuilder {
 
 impl ParseDiagnosticBuilder {
     /// Adds a [LabeledRange] to the [ParseDiagnostic].
-    pub(crate) fn label(mut self, label: &'static str, range: Range) -> Self {
-        self.labels.push((label, range));
+    pub(crate) fn label(mut self, label: &'static str, range: impl Into<Range>) -> Self {
+        self.labels.push((label, range.into()));
         self
     }
 

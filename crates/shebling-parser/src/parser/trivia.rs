@@ -45,7 +45,7 @@ fn trivia(span: Span) -> ParseResult<String> {
             if comment.ends_with('\\') {
                 span.extra.diag(
                     ParseDiagnostic::new(ParseDiagnosticKind::BadEscape)
-                        .label("this backslash is part of a comment", Range::from(&span)),
+                        .label("this backslash is part of a comment", &span),
                 );
             }
 
