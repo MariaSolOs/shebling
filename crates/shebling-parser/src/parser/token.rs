@@ -5,7 +5,7 @@ pub(super) trait ParseToken
 where
     Self: Token,
 {
-    fn parse_token<'a>(self, span: Span<'a>) -> ParseResult<'a, Self> {
+    fn parse_token(self, span: Span) -> ParseResult<Self> {
         // This isn't recursing, it calls the generic function below.
         // By having a separate inner function, override implementations
         // can still use the default `parse_token`.

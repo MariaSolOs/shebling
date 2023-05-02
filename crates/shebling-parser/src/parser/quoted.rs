@@ -10,7 +10,7 @@ fn backslash(span: Span) -> ParseResult<char> {
 fn double_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(DOUBLE_UNIQUOTES))(span)?;
     span.extra
-        .diag(ParseDiagnostic::new(ParseDiagnosticKind::Unichar).label("double quote", range));
+        .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("double quote", range));
 
     Ok((span, quote))
 }
@@ -36,7 +36,7 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
     let last_char = string.chars().last().unwrap_or_default();
     if last_char == '\\' {
         span.extra.diag(
-            ParseDiagnostic::new(ParseDiagnosticKind::BadEscape)
+            ParseDiagnostic::builder(ParseDiagnosticKind::BadEscape)
                 .label("the backslash before this quote is literal", &span)
                 .help("Wanna escape a single quote? 'Let'\\''s do it correctly'"),
         )
@@ -51,13 +51,13 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
     if let Some(next_char) = next_char {
         if next_char.is_ascii_alphabetic() && last_char.is_ascii_alphabetic() {
             span.extra.diag(
-                ParseDiagnostic::new(ParseDiagnosticKind::UnclosedString)
+                ParseDiagnostic::builder(ParseDiagnosticKind::UnclosedString)
                     .label("this apostrophe terminated the string!", range)
                     .help("Try escaping the apostrophe, 'it'\\''s done like this!'"),
             );
         } else if !string.starts_with('\n') && string.contains('\n') {
             span.extra.diag(
-                ParseDiagnostic::new(ParseDiagnosticKind::UnclosedString)
+                ParseDiagnostic::builder(ParseDiagnosticKind::UnclosedString)
                     .label("did you forget to close this string?", start)
                     .label(
                         "this is an ending quote, but the next char looks kinda sus.",
@@ -73,7 +73,7 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
 fn single_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(SINGLE_UNIQUOTES))(span)?;
     span.extra
-        .diag(ParseDiagnostic::new(ParseDiagnosticKind::Unichar).label("single quote", range));
+        .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("single quote", range));
 
     Ok((span, quote))
 }

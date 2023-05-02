@@ -41,7 +41,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
 
                     if let Some(((test_op, math_op), end)) = test_op {
                         span.extra.diag(
-                            ParseDiagnostic::new(ParseDiagnosticKind::BadOperator).label(
+                            ParseDiagnostic::builder(ParseDiagnosticKind::BadOperator).label(
                                 format!(
                                     "for math stuff, use {} instead of -{}.",
                                     math_op.token(),
@@ -286,7 +286,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
 
         if let Some((extra_digs, end)) = extra {
             span.extra.diag(
-                ParseDiagnostic::new(ParseDiagnosticKind::Missing)
+                ParseDiagnostic::builder(ParseDiagnosticKind::Missing)
                     .label(
                         "braces are required for multi-digit positionals",
                         Range::new(start, end),
@@ -295,7 +295,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
             );
         }
 
-        Ok((span, dig.into()))
+        Ok((span, dig))
     }
 
     preceded(
@@ -312,7 +312,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
                         pair(ranged(identifier), followed_by(char('[')))(span)?;
                     if has_bracket {
                         span.extra.diag(
-                            ParseDiagnostic::new(ParseDiagnosticKind::Missing)
+                            ParseDiagnostic::builder(ParseDiagnosticKind::Missing)
                                 .label("use braces when expanding arrays", range)
                                 .help(format!("Use ${{{}[..]}} to tell the shell that the square brackets are part of the expansion.", ident)),
                         );
@@ -321,7 +321,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
                     Ok((span, ident))
                 },
             )),
-            |ident| Variable::new(ident).into(),
+            Variable::new,
         ),
     )(span)
 }

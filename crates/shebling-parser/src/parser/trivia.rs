@@ -5,7 +5,7 @@ const UNISPACES: &str = "\u{A0}\u{200B}";
 fn carriage_return(span: Span) -> ParseResult<char> {
     let (span, (cr, range)) = ranged(char('\r'))(span)?;
     span.extra.diag(
-        ParseDiagnostic::new(ParseDiagnosticKind::UnexpectedChar)
+        ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedChar)
             .label("carriage return", range)
             .help("Try running the script through `tr -d '\\r'`."),
     );
@@ -26,7 +26,7 @@ fn line_space(span: Span) -> ParseResult<char> {
     alt((one_of(" \t"), |span| {
         let (span, (_, range)) = ranged(one_of(UNISPACES))(span)?;
         span.extra
-            .diag(ParseDiagnostic::new(ParseDiagnosticKind::Unichar).label("space", range));
+            .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("space", range));
 
         Ok((span, ' '))
     }))(span)
@@ -44,7 +44,7 @@ fn trivia(span: Span) -> ParseResult<String> {
             // Line continuations at the end of a comment are not actually line continuations.
             if comment.ends_with('\\') {
                 span.extra.diag(
-                    ParseDiagnostic::new(ParseDiagnosticKind::BadEscape)
+                    ParseDiagnostic::builder(ParseDiagnosticKind::BadEscape)
                         .label("this backslash is part of a comment", &span),
                 );
             }

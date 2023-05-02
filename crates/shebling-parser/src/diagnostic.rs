@@ -40,7 +40,7 @@ impl miette::Diagnostic for ParseDiagnostic {
 impl ParseDiagnostic {
     /// Creates a new [builder](ParseDiagnosticBuilder) for a diagnostic
     /// of the given [kind](ParseDiagnosticKind).
-    pub(crate) fn new(kind: ParseDiagnosticKind) -> ParseDiagnosticBuilder {
+    pub(crate) fn builder(kind: ParseDiagnosticKind) -> ParseDiagnosticBuilder {
         // Use the help from the kind, if it has one.
         let help = (&kind as &dyn miette::Diagnostic)
             .help()
