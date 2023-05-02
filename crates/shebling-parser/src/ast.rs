@@ -190,7 +190,7 @@ pub(crate) struct ArithTriExpr {
 pub(crate) type ArithUnExpr = UnExpr<UnOp, ArithTerm>;
 // endregion
 
-// region: Assignments.
+// region: Shell expansions.
 #[from_structs]
 #[derive(Debug, PartialEq)]
 pub(crate) enum DollarExp {
@@ -206,6 +206,12 @@ pub(crate) enum DollarExp {
 #[derive(Debug, New, PartialEq)]
 pub struct ParamExpansion {
     sgmts: Vec<WordSgmt>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Glob {
+    #[new(into)]
+    pattern: String,
 }
 // endregion
 
@@ -248,7 +254,7 @@ pub(crate) enum WordSgmt {
     // TODO BraceExpansion(BraceExpansion),
     // TODO DollarExp(DollarExp),
     // TODO DoubleQuoted(DoubleQuoted),
-    // TODO Glob(Glob),
+    Glob(Glob),
     Lit(Lit),
     // TODO ProcSub(ProcSub),
     SingleQuoted(SingleQuoted),

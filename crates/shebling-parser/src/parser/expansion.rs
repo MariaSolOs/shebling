@@ -1,5 +1,7 @@
 use super::*;
 
+const BRACED_ESCAPABLE: &str = "}\"$`'";
+const EXTGLOB_PREFIX: &str = "?*@!+";
 /// [Special shell parameters](https://www.gnu.org/software/bash/manual/bash.html#Special-Parameters).
 /// Note that `$0` is not included here, we handle numerical variables separately.
 const SPECIAL_PARAMS: &str = "$?!#-@*";
@@ -350,6 +352,29 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
     )(span)
 }
 
+fn extglob(span: Span) -> ParseResult<Glob> {
+    fn group(span: Span) -> ParseResult<String> {
+        recognize_string(delimited(char('('), sgmt, char(')')))(span)
+    }
+
+    fn sgmt(span: Span) -> ParseResult<String> {
+        recognize_string(separated_list0(
+            char('|'),
+            recognize_string(many0(alt((
+                group,
+                // TODO: recognize_string(word_sgmt("")),
+                recognize_string(many1(whitespace)),
+                recognize_string(is_a("<>#;&")),
+            )))),
+        ))(span)
+    }
+
+    map(
+        recognize_string(pair(one_of(EXTGLOB_PREFIX), group)),
+        Glob::new,
+    )(span)
+}
+
 fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
     map(
         delimited(
@@ -359,17 +384,17 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
                 // TODO into(double_quoted),
                 // Special characters in parameter expansions.
                 into(lit(recognize_string(is_a("/:+-=%")))),
-                // TODO: into(extglob),
+                into(extglob),
                 // TODO: unquoted_dollar_sgmt,
                 // TODO: into(backquoted(false)),
-                // TODO: map(
-                //     // Literals, with maybe some escaped characters.
-                //     many1(alt((
-                //         escaped(BRACED_ESCAPABLE),
-                //         parsed(is_not(BRACED_ESCAPABLE)),
-                //     ))),
-                //     |lits| Lit::new(lits.concat()).into(),
-                // ),
+                map(
+                    // Literals, with maybe some escaped characters.
+                    many1(alt((
+                        escaped(BRACED_ESCAPABLE),
+                        recognize_string(is_not(BRACED_ESCAPABLE)),
+                    ))),
+                    |lits| Lit::new(lits.concat()).into(),
+                ),
             ))),
             char('}'),
         ),
@@ -480,6 +505,11 @@ mod tests {
 
         // Must begin with a dollar.
         assert_parse!(dollar_variable("foo") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_extglob() {
+        // TODO
     }
 
     #[test]

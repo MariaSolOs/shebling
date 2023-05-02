@@ -7,7 +7,7 @@ use crate::{
 use nom::{
     branch::alt,
     bytes::complete::{is_a, is_not, tag},
-    character::complete::{alpha1, alphanumeric1, char, digit1, newline, one_of, satisfy},
+    character::complete::{alpha1, alphanumeric1, anychar, char, digit1, newline, one_of, satisfy},
     combinator::{consumed, cut, into, map, not, opt, peek, recognize, value, verify},
     error::context,
     multi::{many0, many1, separated_list0},
@@ -23,7 +23,7 @@ mod tests;
 mod expansion;
 
 mod quoted;
-use quoted::{line_continuation, single_quoted};
+use quoted::{escaped, line_continuation, single_quoted};
 
 mod token;
 use token::token;

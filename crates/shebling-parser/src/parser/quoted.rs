@@ -15,6 +15,19 @@ fn double_uniquote(span: Span) -> ParseResult<char> {
     Ok((span, quote))
 }
 
+pub(super) fn escaped<'a>(can_escape: &'static str) -> impl FnMut(Span<'a>) -> ParseResult<String> {
+    alt((
+        map(line_continuation, |_| String::new()),
+        map(pair(backslash, anychar), move |(bs, c)| {
+            if can_escape.contains(c) {
+                c.into()
+            } else {
+                format!("{}{}", bs, c)
+            }
+        }),
+    ))
+}
+
 pub(super) fn line_continuation(span: Span) -> ParseResult<()> {
     swallow(pair(backslash, newline))(span)
 }
