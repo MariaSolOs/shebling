@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error, miette::Diagnostic)]
 #[error("Parser bailed!")]
-#[diagnostic(code("shebling::parser_error"))]
+#[diagnostic(code("shebling::parser::fatal"))]
 pub(crate) struct ParseError {
     #[label("stopped here")]
     location: Location,

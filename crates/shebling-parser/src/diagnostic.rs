@@ -103,22 +103,22 @@ impl ParseDiagnosticBuilder {
 #[derive(Clone, Debug, Error, miette::Diagnostic)]
 pub(crate) enum ParseDiagnosticKind {
     #[error("Bad escaping!")]
-    #[diagnostic(code(shebling::bad_escape))]
+    #[diagnostic(code(shebling::parser::bad_escape))]
     BadEscape,
 
     #[error("Bad operator!")]
-    #[diagnostic(code(shebling::bad_operator))]
+    #[diagnostic(code(shebling::parser::bad_operator))]
     BadOperator,
 
     #[error("Unclosed string!")]
-    #[diagnostic(code(shebling::unclosed_string))]
+    #[diagnostic(code(shebling::parser::unclosed_string))]
     UnclosedString,
 
     #[error("Unexpected character!")]
-    #[diagnostic(code(shebling::unexpected_char))]
+    #[diagnostic(code(shebling::parser::unexpected_char))]
     UnexpectedChar,
 
     #[error("Unicode character!")]
-    #[diagnostic(code(shebling::unichar), help("Delete and retype it."))]
+    #[diagnostic(code(shebling::parser::unichar), help("Delete and retype it."))]
     Unichar,
 }
