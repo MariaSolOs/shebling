@@ -110,6 +110,10 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::parser::bad_operator))]
     BadOperator,
 
+    #[error("You're missing some stuff here.")]
+    #[diagnostic(code(shebling::parser::missing))]
+    Missing,
+
     #[error("Unclosed string!")]
     #[diagnostic(code(shebling::parser::unclosed_string))]
     UnclosedString,

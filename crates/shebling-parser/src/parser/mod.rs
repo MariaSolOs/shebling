@@ -6,8 +6,8 @@ use crate::{
 };
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag},
-    character::complete::{alpha1, alphanumeric1, char, newline, one_of, satisfy},
+    bytes::complete::{is_a, is_not, tag},
+    character::complete::{alpha1, alphanumeric1, char, digit1, newline, one_of, satisfy},
     combinator::{consumed, cut, into, map, not, opt, peek, recognize, value, verify},
     error::context,
     multi::{many0, many1, separated_list0},
@@ -81,6 +81,13 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
 }
 
 // region: Shared utility parsers.
+fn followed_by<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<bool>
+where
+    P: FnMut(Span<'a>) -> ParseResult<R>,
+{
+    map(opt(peek(parser)), |res| res.is_some())
+}
+
 fn lit<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<Lit>
 where
     P: FnMut(Span<'a>) -> ParseResult<R>,

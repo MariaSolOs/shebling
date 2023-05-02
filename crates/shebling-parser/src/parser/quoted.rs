@@ -21,7 +21,7 @@ pub(super) fn line_continuation(span: Span) -> ParseResult<()> {
 
 pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
     // Parse the opening quote and the string.
-    let (span, (start_quote, string)) = pair(
+    let (span, (start, string)) = pair(
         tag("'"),
         map(
             many0(alt((
@@ -43,7 +43,7 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
     }
 
     // Verify the closing quote.
-    let (span, (end_quote, range)) =
+    let (span, (end, range)) =
         ranged(cut(context("expected ending single quote!", tag("'"))))(span)?;
 
     // Is the string unclosed?
@@ -58,10 +58,10 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
         } else if !string.starts_with('\n') && string.contains('\n') {
             span.extra.diag(
                 ParseDiagnostic::new(ParseDiagnosticKind::UnclosedString)
-                    .label("did you forget to close this string?", start_quote)
+                    .label("did you forget to close this string?", start)
                     .label(
                         "this is an ending quote, but the next char looks kinda sus.",
-                        end_quote,
+                        end,
                     ),
             );
         }

@@ -1,5 +1,9 @@
 use super::*;
 
+/// [Special shell parameters](https://www.gnu.org/software/bash/manual/bash.html#Special-Parameters).
+/// Note that `$0` is not included here, we handle numerical variables separately.
+const SPECIAL_PARAMS: &str = "$?!#-@*";
+
 fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     macro_rules! bin_op {
         ($op:path) => {
@@ -19,7 +23,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                 bin_op!(BinOp::Add),
                 // Read binary minus, but check if it's a binary test operator.
                 |span| {
-                    let (span, (start_span, test_op)) = separated_pair(
+                    let (span, (start, test_op)) = separated_pair(
                         nom_locate::position,
                         bin_op!(BinOp::Sub),
                         opt(peek(pair(
@@ -35,7 +39,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                         ))),
                     )(span)?;
 
-                    if let Some(((test_op, math_op), end_span)) = test_op {
+                    if let Some(((test_op, math_op), end)) = test_op {
                         span.extra.diag(
                             ParseDiagnostic::new(ParseDiagnosticKind::BadOperator).label(
                                 format!(
@@ -43,7 +47,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                                     math_op.token(),
                                     test_op
                                 ),
-                                Range::new(start_span, end_span),
+                                Range::new(start, end),
                             ),
                         );
                     }
@@ -272,6 +276,55 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     seq(span)
 }
 
+fn dollar_variable(span: Span) -> ParseResult<Variable> {
+    fn numerical(span: Span) -> ParseResult<char> {
+        // First match a single digit:
+        let (span, (start, dig)) = pair(position, satisfy(|c| c.is_ascii_digit()))(span)?;
+
+        // Then read extra digits and warn because they need to be braced.
+        let (span, extra) = opt(peek(pair(digit1, position)))(span)?;
+
+        if let Some((extra_digs, end)) = extra {
+            span.extra.diag(
+                ParseDiagnostic::new(ParseDiagnosticKind::Missing)
+                    .label(
+                        "braces are required for multi-digit positionals",
+                        Range::new(start, end),
+                    )
+                    .help(format!("${0}{1} is interpreted as ${0} followed by a literal {1}. Use ${{{0}{1}}} instead.", dig, extra_digs)),
+            );
+        }
+
+        Ok((span, dig.into()))
+    }
+
+    preceded(
+        char('$'),
+        map(
+            alt((
+                // A numerical variable (e.g.: $1).
+                into(numerical),
+                // Special parameters.
+                into(one_of::<_, _, ParseError>(SPECIAL_PARAMS)),
+                // A normal variable.
+                |span| {
+                    let (span, ((ident, range), has_bracket)) =
+                        pair(ranged(identifier), followed_by(char('[')))(span)?;
+                    if has_bracket {
+                        span.extra.diag(
+                            ParseDiagnostic::new(ParseDiagnosticKind::Missing)
+                                .label("use braces when expanding arrays", range)
+                                .help(format!("Use ${{{}[..]}} to tell the shell that the square brackets are part of the expansion.", ident)),
+                        );
+                    }
+
+                    Ok((span, ident))
+                },
+            )),
+            |ident| Variable::new(ident).into(),
+        ),
+    )(span)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,5 +402,25 @@ mod tests {
             ]),
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
+    }
+    #[test]
+    fn test_dollar_variable() {
+        // A dollar followed by an identifier is valid.
+        assert_parse!(dollar_variable("$foo") => "", Variable::new("foo"));
+
+        // If not an identifier, it must be a special parameter.
+        assert_parse!(dollar_variable("$?") => "", Variable::new("?"));
+
+        // Numerical variables are fine:
+        assert_parse!(dollar_variable("$1") => "", Variable::new("1"));
+        // ...but if they're multi-digit we emit a diagnostic.
+        assert_parse!(
+            dollar_variable("$123") => "23",
+            Variable::new("1"),
+            [((1, 2), (1, 5), ParseDiagnosticKind::Missing)]
+        );
+
+        // Must begin with a dollar.
+        assert_parse!(dollar_variable("foo") => Err(1, 1));
     }
 }
