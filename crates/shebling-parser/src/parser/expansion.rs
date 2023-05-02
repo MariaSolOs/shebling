@@ -276,8 +276,50 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     seq(span)
 }
 
+fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
+    preceded(
+        // Make sure we don't try all these if there's no $.
+        peek(char('$')),
+        alt((
+            // Math in $(()).
+            delimited(
+                tag("$(("),
+                into(arith_seq),
+                pair(
+                    char(')'),
+                    cut(context(
+                        "expected a double )) to end the $((..)).",
+                        char(')'),
+                    )),
+                ),
+            ),
+            // TODO into(dollar_cmd_sub),
+            // TODO: Consider error SC1102.
+            // Math in $[].
+            delimited(pair(char('$'), char('[')), into(arith_seq), char(']')),
+            // TODO into(dollar_cmd_expansion),
+            into(param_expansion),
+            into(dollar_variable),
+        )),
+    )(span)
+}
+
 fn dollar_variable(span: Span) -> ParseResult<Variable> {
-    fn numerical(span: Span) -> ParseResult<char> {
+    fn dollar_ident(span: Span) -> ParseResult<String> {
+        let (span, ((ident, range), has_bracket)) =
+            pair(ranged(identifier), followed_by(char('[')))(span)?;
+        if has_bracket {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::Unbraced)
+                .label("use braces when expanding arrays", range)
+                .help(format!("Use ${{{}[..]}} to tell the shell that the square brackets are part of the expansion.", ident))
+            );
+        }
+
+        Ok((span, ident))
+    }
+
+    fn dollar_digit(span: Span) -> ParseResult<String> {
         // First match a single digit:
         let (span, (start, dig)) = pair(position, satisfy(|c| c.is_ascii_digit()))(span)?;
 
@@ -286,45 +328,55 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
 
         if let Some((extra_digs, end)) = extra {
             span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::Missing)
-                    .label(
-                        "braces are required for multi-digit positionals",
-                        Range::new(start, end),
-                    )
-                    .help(format!("${0}{1} is interpreted as ${0} followed by a literal {1}. Use ${{{0}{1}}} instead.", dig, extra_digs)),
+                ParseDiagnostic::builder(ParseDiagnosticKind::Unbraced)
+                .label("braces are required for multi-digit positionals", Range::new(start, end))
+                .help(format!("${0}{1} is interpreted as ${0} followed by a literal {1}. Use ${{{0}{1}}} instead.", dig, extra_digs)),
             );
         }
 
-        Ok((span, dig))
+        Ok((span, dig.into()))
     }
 
     preceded(
         char('$'),
         map(
             alt((
-                // A numerical variable (e.g.: $1).
-                into(numerical),
-                // Special parameters.
-                into(one_of::<_, _, ParseError>(SPECIAL_PARAMS)),
-                // A normal variable.
-                |span| {
-                    let (span, ((ident, range), has_bracket)) =
-                        pair(ranged(identifier), followed_by(char('[')))(span)?;
-                    if has_bracket {
-                        span.extra.diag(
-                            ParseDiagnostic::builder(ParseDiagnosticKind::Missing)
-                                .label("use braces when expanding arrays", range)
-                                .help(format!("Use ${{{}[..]}} to tell the shell that the square brackets are part of the expansion.", ident)),
-                        );
-                    }
-
-                    Ok((span, ident))
-                },
+                dollar_digit,
+                recognize_string(one_of(SPECIAL_PARAMS)),
+                dollar_ident,
             )),
             Variable::new,
         ),
     )(span)
 }
+
+fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
+    map(
+        delimited(
+            tag("${"),
+            many0(alt((
+                into(single_quoted),
+                // TODO into(double_quoted),
+                // Special characters in parameter expansions.
+                into(lit(recognize_string(is_a("/:+-=%")))),
+                // TODO: into(extglob),
+                // TODO: unquoted_dollar_sgmt,
+                // TODO: into(backquoted(false)),
+                // TODO: map(
+                //     // Literals, with maybe some escaped characters.
+                //     many1(alt((
+                //         escaped(BRACED_ESCAPABLE),
+                //         parsed(is_not(BRACED_ESCAPABLE)),
+                //     ))),
+                //     |lits| Lit::new(lits.concat()).into(),
+                // ),
+            ))),
+            char('}'),
+        ),
+        ParamExpansion::new,
+    )(span)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -403,6 +455,12 @@ mod tests {
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
     }
+
+    #[test]
+    fn test_dollar_exp() {
+        // TODO
+    }
+
     #[test]
     fn test_dollar_variable() {
         // A dollar followed by an identifier is valid.
@@ -417,10 +475,15 @@ mod tests {
         assert_parse!(
             dollar_variable("$123") => "23",
             Variable::new("1"),
-            [((1, 2), (1, 5), ParseDiagnosticKind::Missing)]
+            [((1, 2), (1, 5), ParseDiagnosticKind::Unbraced)]
         );
 
         // Must begin with a dollar.
         assert_parse!(dollar_variable("foo") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_param_expansion() {
+        // TODO
     }
 }

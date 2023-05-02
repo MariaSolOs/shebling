@@ -190,6 +190,25 @@ pub(crate) struct ArithTriExpr {
 pub(crate) type ArithUnExpr = UnExpr<UnOp, ArithTerm>;
 // endregion
 
+// region: Assignments.
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum DollarExp {
+    Arith(ArithSeq),
+    // TODO CmdExpansion(DollarCmdExpansion),
+    // TODO CmdSub(DollarCmdSub),
+    // TODO DoubleQuoting(DoubleQuoted),
+    ParamExpansion(ParamExpansion),
+    SingleQuoting(SingleQuoted),
+    Variable(Variable),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub struct ParamExpansion {
+    sgmts: Vec<WordSgmt>,
+}
+// endregion
+
 // region: Quoted strings.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct SingleQuoted {
