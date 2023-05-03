@@ -1,10 +1,101 @@
 use super::*;
 
+const DOUBLE_ESCAPABLE: &str = "\\\"$`";
 const DOUBLE_UNIQUOTES: &str = "\u{201C}\u{201D}\u{2033}\u{2036}";
 const SINGLE_UNIQUOTES: &str = "\u{2018}\u{2019}";
 
 fn backslash(span: Span) -> ParseResult<char> {
     char('\\')(span)
+}
+
+pub(super) fn double_quoted(span: Span) -> ParseResult<DoubleQuoted> {
+    // Parse the quotes and string segments.
+    let (span, start) = tag("\"")(span)?;
+    let (span, sgmts) = many0(alt((
+        into(dollar_exp),
+        into(double_quoted_lit),
+        // TODO into(backquoted(true)),
+        into(lit(double_uniquote)),
+    )))(span)?;
+    let (span, end) = cut(context("Expected end of double quoted string!", tag("\"")))(span)?;
+
+    // Does this look like an unclosed string?
+    let (span, sus_next_char) =
+        followed_by(alt((satisfy(is_sus_char_after_quote), one_of("$\""))))(span)?;
+    if sus_next_char {
+        if let Some(DoubleQuotedSgmt::Lit(first_lit)) = sgmts.first() {
+            if !first_lit.value().starts_with('\n')
+                && sgmts.iter().any(|sgmt| {
+                    if let DoubleQuotedSgmt::Lit(lit) = sgmt {
+                        lit.value().contains('\n')
+                    } else {
+                        false
+                    }
+                })
+            {
+                report_unclosed_string(&span, start, end);
+            }
+        }
+    }
+
+    Ok((span, DoubleQuoted::new(sgmts)))
+}
+
+fn double_quoted_lit(span: Span) -> ParseResult<Lit> {
+    fn double_quoted_escape(span: Span) -> ParseResult<String> {
+        let (span, (escaped, range)) = ranged(escaped(DOUBLE_ESCAPABLE))(span)?;
+
+        if escaped.len() >= 2 {
+            // Some non-special character was escaped.
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::BadEscape).label(
+                    "this character has no special behavior when escaped inside double quotes",
+                    range,
+                ),
+            );
+        }
+
+        Ok((span, escaped))
+    }
+
+    fn lonely_dollar(span: Span) -> ParseResult<Lit> {
+        // Parse the literal dollar.
+        let (span, (dollar, range)) = ranged(lit(char('$')))(span)?;
+
+        // Sometimes people want to escape a dollar inside double quotes and end the string
+        // to achieve that. But that's ugly, they should just use a backslash.
+        let (span, next_char) = opt(peek(preceded(
+            pair(char('"'), opt(char('"'))),
+            alt((satisfy(|c| c.is_ascii_alphanumeric()), one_of("_?!#-@"))),
+        )))(span)?;
+        if let Some(next_char) = next_char {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::MissingEscape)
+                    .label("is this supposed to be a literal dollar?", range)
+                    .help(format!(
+                        "Instead of \" .. $\"{0}, use \" .. \\${0} .. \"",
+                        next_char
+                    )),
+            );
+        }
+
+        Ok((span, dollar))
+    }
+
+    alt((
+        map(
+            many1(alt((
+                double_quoted_escape,
+                // Parse until we hit an escapable char or a unicode quote.
+                recognize_string(is_not(&*format!(
+                    "{}{}",
+                    DOUBLE_ESCAPABLE, DOUBLE_UNIQUOTES
+                ))),
+            ))),
+            |sgmt| Lit::new(sgmt.concat()),
+        ),
+        lonely_dollar,
+    ))(span)
 }
 
 fn double_uniquote(span: Span) -> ParseResult<char> {
@@ -69,14 +160,7 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
                     .help("Try escaping the apostrophe, 'it'\\''s done like this!'"),
             );
         } else if !string.starts_with('\n') && string.contains('\n') {
-            span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::UnclosedString)
-                    .label("did you forget to close this string?", start)
-                    .label(
-                        "this is an ending quote, but the next char looks kinda sus.",
-                        end,
-                    ),
-            );
+            report_unclosed_string(&span, start, end);
         }
     }
 
@@ -95,11 +179,50 @@ fn single_uniquote(span: Span) -> ParseResult<char> {
 fn is_sus_char_after_quote(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '_' | '%')
 }
+
+fn report_unclosed_string(span: &Span, start: Span, end: Span) {
+    span.extra.diag(
+        ParseDiagnostic::builder(ParseDiagnosticKind::UnclosedString)
+            .label("did you forget to close this string?", start)
+            .label(
+                "this is an ending quote, but the next char looks kinda sus.",
+                end,
+            ),
+    )
+}
 // endregion
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_double_quoted() {
+        // TODO
+    }
+
+    #[test]
+    fn test_double_quoted_lit() {
+        // Only certain characters can be escaped inside double quotes.
+        assert_parse!(double_quoted_lit("foo\\$") => "", Lit::new("foo$"));
+        assert_parse!(
+            double_quoted_lit("foo\\n") => "",
+            Lit::new("foo\\n"),
+            [((1, 4), (1, 6), ParseDiagnosticKind::BadEscape)]
+        );
+
+        // A lonely dollar is fine,
+        assert_parse!(double_quoted_lit("$") => "", Lit::new("$"));
+        // ...but emit warning when it looks like the "literal dollar hack".
+        assert_parse!(
+            double_quoted_lit("$\"1") => "\"1",
+            Lit::new("$"),
+            [((1, 1), (1, 2), ParseDiagnosticKind::MissingEscape)]
+        );
+
+        // Can't be empty.
+        assert_parse!(double_quoted_lit("") => Err(1, 1));
+    }
 
     #[test]
     fn test_double_uniquote() {

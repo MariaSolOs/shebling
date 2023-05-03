@@ -221,6 +221,19 @@ pub(crate) struct SingleQuoted {
     #[new(into)]
     string: String,
 }
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct DoubleQuoted {
+    sgmts: Vec<DoubleQuotedSgmt>,
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum DoubleQuotedSgmt {
+    // TODO BackQuoted(BackQuoted),
+    Lit(Lit),
+    DollarExp(DollarExp),
+}
 // endregion
 
 // region: Words.
@@ -252,8 +265,8 @@ impl Word {
 pub(crate) enum WordSgmt {
     // TODO BackQuoted(BackQuoted),
     // TODO BraceExpansion(BraceExpansion),
-    // TODO DollarExp(DollarExp),
-    // TODO DoubleQuoted(DoubleQuoted),
+    DollarExp(DollarExp),
+    DoubleQuoted(DoubleQuoted),
     Glob(Glob),
     Lit(Lit),
     // TODO ProcSub(ProcSub),

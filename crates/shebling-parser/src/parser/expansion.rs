@@ -244,7 +244,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                 map(
                     many1(alt((
                         into(single_quoted),
-                        // TODO into(double_quoted),
+                        into(double_quoted),
                         // TODO unquoted_dollar_sgmt,
                         // TODO into(brace_expansion),
                         // TODO into(backquoted(false)),
@@ -278,7 +278,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     seq(span)
 }
 
-fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
+pub(super) fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
     preceded(
         // Make sure we don't try all these if there's no $.
         peek(char('$')),
@@ -381,7 +381,7 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
             tag("${"),
             many0(alt((
                 into(single_quoted),
-                // TODO into(double_quoted),
+                into(double_quoted),
                 // Special characters in parameter expansions.
                 into(lit(recognize_string(is_a("/:+-=%")))),
                 into(extglob),
