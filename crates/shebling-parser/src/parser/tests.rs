@@ -17,10 +17,15 @@ macro_rules! assert_diag_eq {
 
         // Check the range coordinates.
         let $crate::Range { start, end } = $diag.range();
-        ::pretty_assertions::assert_eq!(start.line, $line1, "Start column: {}", start.line);
-        ::pretty_assertions::assert_eq!(start.column, $col1, "Start column: {}", start.column);
-        ::pretty_assertions::assert_eq!(end.line, $line2, "End line: {}", end.line);
-        ::pretty_assertions::assert_eq!(end.column, $col2, "End column: {}", end.column);
+        ::pretty_assertions::assert_eq!(start.line, $line1, "Actual start line: {}", start.line);
+        ::pretty_assertions::assert_eq!(
+            start.column,
+            $col1,
+            "Actual start column: {}",
+            start.column
+        );
+        ::pretty_assertions::assert_eq!(end.line, $line2, "Actual end line: {}", end.line);
+        ::pretty_assertions::assert_eq!(end.column, $col2, "Actual end column: {}", end.column);
     };
 }
 
@@ -84,16 +89,17 @@ macro_rules! assert_parse {
             .expect_err("Parser should fail.");
 
         // Check the error location.
-        ::pretty_assertions::assert_eq!(err.line(), $line);
-        ::pretty_assertions::assert_eq!(err.column(), $col);
+        let (line, column) = (err.line(), err.column());
+        ::pretty_assertions::assert_eq!(line, $line, "Actual line: {}", line);
+        ::pretty_assertions::assert_eq!(column, $col, "Actual column: {}", column);
 
         // For flexibility, just check that the notes have the expected messages.
         let mut notes = err.notes().into_iter();
         $(
             let note = notes.next().expect("Expected a parser note.");
-            ::pretty_assertions::assert_eq!(note.line(), $line1);
-            ::pretty_assertions::assert_eq!(note.column(), $col1);
-            let note = note.note();
+            let (line, column, note) = (note.line(), note.column(), note.note());
+            ::pretty_assertions::assert_eq!(line, $line1, "Actual line: {}", line);
+            ::pretty_assertions::assert_eq!(column, $col1, "Actual column: {}", column);
             assert!(note.contains($note), "Expected \"{}\" to contain \"{}\"", note, $note);
         )*
         let last_note = notes.next();
