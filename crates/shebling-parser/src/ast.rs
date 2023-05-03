@@ -199,7 +199,7 @@ pub(crate) enum DollarExp {
     // TODO CmdSub(DollarCmdSub),
     // TODO DoubleQuoting(DoubleQuoted),
     ParamExpansion(ParamExpansion),
-    SingleQuoting(SingleQuoted),
+    // TODO SingleQuoting(SingleQuoted),
     Variable(Variable),
 }
 
@@ -265,7 +265,7 @@ impl Word {
 pub(crate) enum WordSgmt {
     // TODO BackQuoted(BackQuoted),
     // TODO BraceExpansion(BraceExpansion),
-    DollarExp(DollarExp),
+    // TODO DollarExp(DollarExp),
     DoubleQuoted(DoubleQuoted),
     Glob(Glob),
     Lit(Lit),

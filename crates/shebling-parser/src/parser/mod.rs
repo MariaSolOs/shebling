@@ -8,7 +8,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_a, is_not, tag},
     character::complete::{alpha1, alphanumeric1, anychar, char, digit1, newline, one_of, satisfy},
-    combinator::{consumed, cut, into, map, not, opt, peek, recognize, value, verify},
+    combinator::{consumed, cut, eof, into, map, not, opt, peek, recognize, value, verify},
     error::context,
     multi::{many0, many1, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -21,19 +21,22 @@ use nom_locate::position;
 mod tests;
 
 mod expansion;
-use expansion::dollar_exp;
+use expansion::{dollar_exp, extglob};
 
 mod quoted;
-use quoted::{double_quoted, escaped, line_continuation, single_quoted};
+use quoted::{
+    backslash, double_quoted, double_uniquote, escaped, line_continuation, single_quoted,
+    single_uniquote,
+};
 
 mod token;
 use token::token;
 
 mod trivia;
-use trivia::whitespace;
+use trivia::{line_ending, line_space, trivia, whitespace};
 
 mod word;
-use word::identifier;
+use word::{identifier, lit_word_sgmt, word_sgmt};
 
 type ParseResult<'a, R> = nom::IResult<Span<'a>, R, ParseError>;
 

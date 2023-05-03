@@ -1,10 +1,10 @@
 use super::*;
 
-const DOUBLE_ESCAPABLE: &str = "\\\"$`";
-const DOUBLE_UNIQUOTES: &str = "\u{201C}\u{201D}\u{2033}\u{2036}";
-const SINGLE_UNIQUOTES: &str = "\u{2018}\u{2019}";
+pub(super) const DOUBLE_ESCAPABLE: &str = "\\\"$`";
+pub(super) const DOUBLE_UNIQUOTES: &str = "\u{201C}\u{201D}\u{2033}\u{2036}";
+pub(super) const SINGLE_UNIQUOTES: &str = "\u{2018}\u{2019}";
 
-fn backslash(span: Span) -> ParseResult<char> {
+pub(super) fn backslash(span: Span) -> ParseResult<char> {
     char('\\')(span)
 }
 
@@ -98,7 +98,7 @@ fn double_quoted_lit(span: Span) -> ParseResult<Lit> {
     ))(span)
 }
 
-fn double_uniquote(span: Span) -> ParseResult<char> {
+pub(super) fn double_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(DOUBLE_UNIQUOTES))(span)?;
     span.extra
         .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("double quote", range));
@@ -167,7 +167,7 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
     Ok((span, SingleQuoted::new(string)))
 }
 
-fn single_uniquote(span: Span) -> ParseResult<char> {
+pub(super) fn single_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(SINGLE_UNIQUOTES))(span)?;
     span.extra
         .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("single quote", range));

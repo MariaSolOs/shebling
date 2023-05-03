@@ -17,12 +17,12 @@ fn comment(span: Span) -> ParseResult<String> {
     recognize_string(pair(char('#'), is_not("\r\n")))(span)
 }
 
-fn line_ending(span: Span) -> ParseResult<char> {
+pub(super) fn line_ending(span: Span) -> ParseResult<char> {
     // TODO: readPendingHereDocs
     preceded(opt(carriage_return), newline)(span)
 }
 
-fn line_space(span: Span) -> ParseResult<char> {
+pub(super) fn line_space(span: Span) -> ParseResult<char> {
     alt((one_of(" \t"), |span| {
         let (span, (_, range)) = ranged(one_of(UNISPACES))(span)?;
         span.extra
@@ -32,7 +32,7 @@ fn line_space(span: Span) -> ParseResult<char> {
     }))(span)
 }
 
-fn trivia(span: Span) -> ParseResult<String> {
+pub(super) fn trivia(span: Span) -> ParseResult<String> {
     fn continued(span: Span) -> ParseResult<Vec<char>> {
         let (span, (mut continued, comment)) = preceded(
             line_continuation,

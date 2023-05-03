@@ -1,7 +1,7 @@
 use super::*;
 
 const BRACED_ESCAPABLE: &str = "}\"$`'";
-const EXTGLOB_PREFIX: &str = "?*@!+";
+pub(crate) const EXTGLOB_PREFIX: &str = "?*@!+";
 /// [Special shell parameters](https://www.gnu.org/software/bash/manual/bash.html#Special-Parameters).
 /// Note that `$0` is not included here, we handle numerical variables separately.
 const SPECIAL_PARAMS: &str = "$?!#-@*";
@@ -250,7 +250,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                         // TODO into(backquoted(false)),
                         into(lit(char('#'))),
                         // Parse a literal until something that looks like a math operator.
-                        // TODO lit_word_sgmt("+-*/=%^,]?:"),
+                        lit_word_sgmt("+-*/=%^,]?:"),
                     ))),
                     |sgmts| ArithExpansion::new(sgmts).into(),
                 ),
@@ -352,7 +352,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
     )(span)
 }
 
-fn extglob(span: Span) -> ParseResult<Glob> {
+pub(super) fn extglob(span: Span) -> ParseResult<Glob> {
     fn group(span: Span) -> ParseResult<String> {
         recognize_string(delimited(char('('), sgmt, char(')')))(span)
     }
@@ -362,7 +362,7 @@ fn extglob(span: Span) -> ParseResult<Glob> {
             char('|'),
             recognize_string(many0(alt((
                 group,
-                // TODO: recognize_string(word_sgmt("")),
+                recognize_string(word_sgmt),
                 recognize_string(many1(whitespace)),
                 recognize_string(is_a("<>#;&")),
             )))),
