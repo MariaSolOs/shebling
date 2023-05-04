@@ -100,8 +100,9 @@ fn double_quoted_lit(span: Span) -> ParseResult<Lit> {
 
 pub(super) fn double_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(DOUBLE_UNIQUOTES))(span)?;
-    span.extra
-        .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("double quote", range));
+    span.extra.diag(
+        ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("unicode double quote", range),
+    );
 
     Ok((span, quote))
 }
@@ -169,8 +170,9 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
 
 pub(super) fn single_uniquote(span: Span) -> ParseResult<char> {
     let (span, (quote, range)) = ranged(one_of(SINGLE_UNIQUOTES))(span)?;
-    span.extra
-        .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("single quote", range));
+    span.extra.diag(
+        ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("unicode single quote", range),
+    );
 
     Ok((span, quote))
 }

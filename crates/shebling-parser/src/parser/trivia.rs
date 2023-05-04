@@ -7,7 +7,7 @@ fn carriage_return(span: Span) -> ParseResult<char> {
     span.extra.diag(
         ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedChar)
             .label("carriage return", range)
-            .help("Try running the script through `tr -d '\\r'`."),
+            .help("Try running the script through tr -d '\\r'."),
     );
 
     Ok((span, cr))
@@ -25,8 +25,9 @@ pub(super) fn line_ending(span: Span) -> ParseResult<char> {
 pub(super) fn line_space(span: Span) -> ParseResult<char> {
     alt((one_of(" \t"), |span| {
         let (span, (_, range)) = ranged(one_of(UNISPACES))(span)?;
-        span.extra
-            .diag(ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("space", range));
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("unicode space", range),
+        );
 
         Ok((span, ' '))
     }))(span)
