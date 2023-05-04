@@ -33,7 +33,7 @@ impl ParseError {
 #[derive(Clone, Debug, miette::Diagnostic, Error)]
 #[error("{note}")]
 pub(crate) struct ParseErrorNote {
-    #[label("{note}")]
+    #[label]
     location: Location,
     note: &'static str,
 }
