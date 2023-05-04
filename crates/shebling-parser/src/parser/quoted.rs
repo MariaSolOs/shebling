@@ -185,7 +185,7 @@ fn report_unclosed_string(span: &Span, start: Span, end: Span) {
         ParseDiagnostic::builder(ParseDiagnosticKind::UnclosedString)
             .label("did you forget to close this string?", start)
             .label(
-                "this is an ending quote, but the next char looks kinda sus.",
+                "this is an ending quote, but the next char looks kinda sus",
                 end,
             ),
     )

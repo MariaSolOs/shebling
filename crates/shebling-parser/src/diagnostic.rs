@@ -110,6 +110,10 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::parser::bad_operator))]
     BadOperator,
 
+    #[error("Bad spacing!")]
+    #[diagnostic(code(shebling::parser::bad_space))]
+    BadSpace,
+
     #[error("You should escape this character.")]
     #[diagnostic(code(shebling::parser::missing_escape))]
     MissingEscape,

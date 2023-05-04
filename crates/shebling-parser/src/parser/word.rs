@@ -33,8 +33,11 @@ fn lit_string(end_pattern: &'static str) -> impl Fn(Span) -> ParseResult<String>
             ))(span)?;
 
             if trailing_space.is_some() {
-                // TODOspan.extra
-                //     .report(Lint::new(Range::new(start_span, &span), BS_TRAILING_SPACE));
+                span.extra.diag(
+                    ParseDiagnostic::builder(ParseDiagnosticKind::BadSpace)
+                    .label("trailing space breaks the line continuation", Range::new(start, &span))
+                    .help("Remove the spaces to continue the line, or quote it for literal spacing.")
+                );
             }
         }
 
@@ -45,24 +48,22 @@ fn lit_string(end_pattern: &'static str) -> impl Fn(Span) -> ParseResult<String>
         // Looks like an escaped character, but isn't.
         let (span, (c, range)) = ranged(preceded(backslash, anychar))(span)?;
 
-        if let Some((name, fix)) = match c {
-            'n' => Some(("new line", "a quoted, literal new line")),
-            't' => Some(("tab", "`$(printf 't')`")),
-            'r' => Some(("carriage return", "`(printf 'r')`")),
+        let help = if let Some((name, fix)) = match c {
+            'n' => Some(("new line", "a literal quoted new line")),
+            't' => Some(("tab", "$(printf 't')")),
+            'r' => Some(("carriage return", "(printf 'r')")),
             _ => None,
         } {
-            // TODO span.extra.report(Lint::with_message(
-            //     range,
-            //     UNESCAPED_WHITESPACE,
-            //     format_unescaped_whitespace(c, name, alt),
-            // ));
+            format!("For a {}, use {} instead.", name, fix)
         } else {
-            // TODO span.extra.report(Lint::with_message(
-            //     range,
-            //     IGNORING_BS,
-            //     format_ignoring_bs(c),
-            // ));
-        }
+            "For a literal backslash, single quote or escape it.".into()
+        };
+
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::BadEscape)
+                .label("the backslash here will be ignored", range)
+                .help(help),
+        );
 
         Ok((span, c.into()))
     }
@@ -71,7 +72,7 @@ fn lit_string(end_pattern: &'static str) -> impl Fn(Span) -> ParseResult<String>
         map(
             many1(alt((
                 // Special case for line continuation + commented sequences.
-                // By calling trivia() after the peek, we make sure that the lint for `# foo \` is reported.
+                // By calling trivia() after the peek, we make sure that the lint for '# foo \' is reported.
                 value(String::new(), terminated(peek(line_continuation), trivia)),
                 alt((escaped_lit, failed_escaped)),
                 // Some other sequence of non-special, unescaped characters.
