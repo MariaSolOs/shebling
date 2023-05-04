@@ -162,7 +162,30 @@ mod tests {
 
     #[test]
     fn test_lit_string() {
-        // TODO
+        let lit = lit_string("");
+
+        // Some non-escaped, not special, sequence of characters.
+        assert_parse!(lit("foo") => "", "foo");
+
+        // Escaped literals that generate no warnings.
+        assert_parse!(lit("\\$") => "", "$");
+        assert_parse!(lit("\\{") => "", "{");
+
+        // Warn about commented line continuations.
+        assert_parse!(lit("\\\n# foo \\\n") => "\n", "", [((2, 8), ParseDiagnosticKind::BadEscape)]);
+
+        // Warn about trailing space after a line continuation.
+        assert_parse!(lit("\\  \n") => "", " ", [((1, 2), (2, 1), ParseDiagnosticKind::BadSpace)]);
+        assert_parse!(lit("\\  ") => "", " ", [((1, 2), (1, 4), ParseDiagnosticKind::BadSpace)]);
+
+        // "Escaped characters" where the backslash is ignored.
+        assert_parse!(lit("\\t") => "", "t", [((1, 1), (1, 3), ParseDiagnosticKind::BadEscape)]);
+        assert_parse!(lit("\\a") => "", "a", [((1, 1), (1, 3), ParseDiagnosticKind::BadEscape)]);
+
+        // Cannot be empty.
+        assert_parse!(lit("") => Err(1, 1));
+        // If not escaped, it cannot be a special character.
+        assert_parse!(lit("$") => Err(1, 1));
     }
 
     #[test]
