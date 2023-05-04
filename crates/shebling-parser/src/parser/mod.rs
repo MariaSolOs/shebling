@@ -1,14 +1,19 @@
-use crate::{
-    ast::*,
-    diagnostic::{ParseDiagnostic, ParseDiagnosticKind},
-    error::ParseError,
-    Range, Span,
-};
+#[cfg(test)]
+#[macro_use]
+mod tests;
+
+mod command;
+mod expansion;
+mod quoted;
+mod token;
+mod trivia;
+mod word;
+
 use nom::{
     branch::alt,
     bytes::complete::{is_a, is_not, tag},
     character::complete::{alpha1, alphanumeric1, anychar, char, digit1, newline, one_of, satisfy},
-    combinator::{consumed, cut, eof, into, map, not, opt, peek, recognize, value, verify},
+    combinator::{consumed, cut, eof, fail, into, map, not, opt, peek, recognize, value, verify},
     error::context,
     multi::{many0, many1, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -16,27 +21,17 @@ use nom::{
 };
 use nom_locate::position;
 
-#[cfg(test)]
-#[macro_use]
-mod tests;
-
-mod expansion;
-use expansion::{dollar_exp, extglob};
-
-mod quoted;
-use quoted::{
-    backslash, double_quoted, double_uniquote, escaped, line_continuation, single_quoted,
-    single_uniquote,
+use crate::{
+    ast::*,
+    diagnostic::{ParseDiagnostic, ParseDiagnosticKind},
+    error::ParseError,
+    Range, Span,
 };
-
-mod token;
-use token::token;
-
-mod trivia;
-use trivia::{line_ending, line_space, trivia, whitespace};
-
-mod word;
-use word::{identifier, lit_word_sgmt, word_sgmt};
+use expansion::*;
+use quoted::*;
+use token::*;
+use trivia::*;
+use word::*;
 
 type ParseResult<'a, R> = nom::IResult<Span<'a>, R, ParseError>;
 

@@ -1,17 +1,15 @@
 // TODO: Remove all the #[allow(..)] after development.
 #![allow(dead_code)]
 
-use shebling_codegen::New;
-use std::{borrow::Borrow, cell::RefCell};
-
+mod ast;
+mod diagnostic;
+mod error;
 mod parser;
 
-mod ast;
+use std::{borrow::Borrow, cell::RefCell};
 
-mod diagnostic;
 use diagnostic::{ParseDiagnostic, ParseDiagnosticBuilder};
-
-mod error;
+use shebling_codegen::New;
 
 // region: Symbol location.
 type Span<'a> = nom_locate::LocatedSpan<&'a str, ParseContext>;
