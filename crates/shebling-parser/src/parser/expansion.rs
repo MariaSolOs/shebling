@@ -26,7 +26,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                 // Read binary minus, but check if it's a binary test operator.
                 |span| {
                     let (span, (start, test_op)) = separated_pair(
-                        nom_locate::position,
+                        position,
                         bin_op!(BinOp::Sub),
                         opt(peek(pair(
                             consumed(alt((
@@ -37,7 +37,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                                 value(BinOp::Lt, tag("lt")),
                                 value(BinOp::Ne, tag("ne")),
                             ))),
-                            nom_locate::position,
+                            position,
                         ))),
                     )(span)?;
 

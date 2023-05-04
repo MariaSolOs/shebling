@@ -8,7 +8,7 @@ where
     fn parse_token(self, span: Span) -> ParseResult<Self> {
         // This isn't recursing, it calls the generic function below.
         // By having a separate inner function, override implementations
-        // can still use the default `parse_token`.
+        // can still use the default parse_token.
         parse_token(self)(span)
     }
 }
