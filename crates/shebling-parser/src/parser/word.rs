@@ -162,7 +162,7 @@ fn word_sgmt_before_pattern<'a>(
             // Fallback for other glob prefix characters:
             into(lit(one_of("@!+["))),
             // TODO unquoted_dollar_sgmt,
-            // TODO into(brace_expansion),
+            into(brace_expansion),
             // TODO  into(backquoted(false)),
             // TODO into(proc_sub),
             into(lit(alt((single_uniquote, double_uniquote)))),

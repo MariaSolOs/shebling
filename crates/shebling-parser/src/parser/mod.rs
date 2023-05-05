@@ -15,7 +15,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, anychar, char, digit1, newline, one_of, satisfy},
     combinator::{consumed, cut, eof, fail, into, map, not, opt, peek, recognize, value, verify},
     error::context,
-    multi::{many0, many1, separated_list0},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Finish,
 };
@@ -42,9 +42,10 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    match command::cond(source_to_span(source_code)).finish() {
+    match brace_expansion(source_to_span(source_code)).finish() {
         Ok((span, res)) => {
-            // println!("{:#?}", res);
+            println!("{:#?}", span);
+            println!("{:#?}", res);
             let diags: Vec<ParseDiagnostic> = span.extra.take_diags();
 
             let source_code = Arc::new(miette::NamedSource::new(

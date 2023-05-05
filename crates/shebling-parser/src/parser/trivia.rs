@@ -1,6 +1,6 @@
 use super::*;
 
-const UNISPACES: &str = "\u{A0}\u{200B}";
+pub(super) const UNISPACES: &str = "\u{A0}\u{200B}";
 
 fn carriage_return(span: Span) -> ParseResult<char> {
     let (span, (cr, range)) = ranged(char('\r'))(span)?;

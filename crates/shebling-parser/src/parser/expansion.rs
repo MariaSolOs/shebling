@@ -1,4 +1,5 @@
 use super::*;
+use trivia::UNISPACES;
 
 const BRACED_ESCAPABLE: &str = "}\"$`'";
 pub(crate) const EXTGLOB_PREFIX: &str = "?*@!+";
@@ -246,7 +247,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                         into(single_quoted),
                         into(double_quoted),
                         // TODO unquoted_dollar_sgmt,
-                        // TODO into(brace_expansion),
+                        into(brace_expansion),
                         // TODO into(backquoted(false)),
                         into(lit(char('#'))),
                         // Parse a literal until something that looks like a math operator.
@@ -276,6 +277,68 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     }
 
     seq(span)
+}
+
+pub(super) fn brace_expansion(span: Span) -> ParseResult<BraceExpansion> {
+    fn braced(span: Span) -> ParseResult<BraceExpansion> {
+        delimited(
+            char('{'),
+            map(
+                context(
+                    "invalid sequence expression!",
+                    verify(
+                        separated_list1(char(','), braced_word),
+                        |words: &Vec<Word>| {
+                            // If the brace expansion is a single word, it must be
+                            // a lit of the form `x..y`.
+                            if words.len() == 1 {
+                                let word = &words[0];
+
+                                if word.sgmts().is_empty() {
+                                    return false;
+                                } else if let Some(lit) = word.as_lit() {
+                                    return lit.value().split_once("..").map_or(
+                                        false,
+                                        |(prefix, suffix)| {
+                                            !prefix.is_empty()
+                                                && !prefix.contains("..")
+                                                && !suffix.is_empty()
+                                                && !suffix.contains("..")
+                                        },
+                                    );
+                                }
+                            }
+
+                            true
+                        },
+                    ),
+                ),
+                BraceExpansion::new,
+            ),
+            char('}'),
+        )(span)
+    }
+
+    fn braced_word(span: Span) -> ParseResult<Word> {
+        map(
+            many0(alt((
+                into(braced),
+                into(dollar_exp),
+                into(single_quoted),
+                into(double_quoted),
+                map(
+                    many1(alt((
+                        escaped(""),
+                        recognize_string(is_not(&*format!("{{}}\"$', \t\r\n{}", UNISPACES))),
+                    ))),
+                    |lits| Lit::new(lits.concat()).into(),
+                ),
+            ))),
+            Word::new,
+        )(span)
+    }
+
+    braced(span)
 }
 
 pub(super) fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
@@ -479,6 +542,53 @@ mod tests {
             ]),
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
+    }
+
+    #[test]
+    fn test_brace_expansion() {
+        // Valid sequence expressions.
+        assert_parse!(
+            brace_expansion("{1..5}") => "",
+            BraceExpansion::new(vec![tests::lit_word("1..5")]
+        ));
+        assert_parse!(
+            brace_expansion("{$x..$y}") => "",
+            BraceExpansion::new(vec![Word::new(vec![
+                DollarExp::from(Variable::new("x")).into(),
+                Lit::new("..").into(),
+                DollarExp::from(Variable::new("y")).into(),
+            ])])
+        );
+
+        // The closing brace can be escaped.
+        assert_parse!(
+            brace_expansion("{foo,\\}}") => "",
+            BraceExpansion::new(vec![tests::lit_word("foo"), tests::lit_word("\\}")]
+        ));
+
+        // Nested expansions are legal.
+        assert_parse!(
+            brace_expansion("{foo.{txt,md}}") => "",
+            BraceExpansion::new(vec![
+                Word::new(vec![
+                    Lit::new("foo.").into(),
+                    BraceExpansion::new(vec![tests::lit_word("txt"), tests::lit_word("md")]).into()
+                ])
+            ],
+        ));
+
+        // Part of the expansion can be an empty word.
+        assert_parse!(
+            brace_expansion("{,foo}") => "",
+            BraceExpansion::new(vec![Word::new(vec![]), tests::lit_word("foo")]
+        ));
+
+        // Cannot be empty.
+        assert_parse!(brace_expansion("{}") => Err((1, 2), Notes: [((1, 2), "invalid sequence")]));
+
+        // If there's a single element, it must be a valid sequence expression.
+        assert_parse!(brace_expansion("{foo}") => Err((1, 2), Notes: [((1, 2), "invalid sequence")]));
+        assert_parse!(brace_expansion("{..1}") => Err((1, 2), Notes: [((1, 2), "invalid sequence")]));
     }
 
     #[test]

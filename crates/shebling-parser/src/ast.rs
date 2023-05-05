@@ -291,13 +291,18 @@ impl Word {
 #[derive(Debug, PartialEq)]
 pub(crate) enum WordSgmt {
     // TODO BackQuoted(BackQuoted),
-    // TODO BraceExpansion(BraceExpansion),
-    // TODO DollarExp(DollarExp),
+    BraceExpansion(BraceExpansion),
+    DollarExp(DollarExp),
     DoubleQuoted(DoubleQuoted),
     Glob(Glob),
     Lit(Lit),
     // TODO ProcSub(ProcSub),
     SingleQuoted(SingleQuoted),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct BraceExpansion {
+    smgts: Vec<Word>,
 }
 
 #[derive(Debug, New, PartialEq)]
