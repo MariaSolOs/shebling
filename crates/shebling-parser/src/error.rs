@@ -1,4 +1,7 @@
-use crate::{diagnostic::ParseDiagnostic, Location, Span};
+use crate::{
+    diagnostic::ParseDiagnostic,
+    location::{Location, Span},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error, miette::Diagnostic)]
@@ -14,11 +17,11 @@ pub(crate) struct ParseError {
 
 impl ParseError {
     pub(crate) fn line(&self) -> u32 {
-        self.location.line
+        self.location.line()
     }
 
     pub(crate) fn column(&self) -> usize {
-        self.location.column
+        self.location.column()
     }
 
     pub(crate) fn notes(&self) -> &[ParseErrorNote] {
@@ -40,11 +43,11 @@ pub(crate) struct ParseErrorNote {
 
 impl ParseErrorNote {
     pub(crate) fn line(&self) -> u32 {
-        self.location.line
+        self.location.line()
     }
 
     pub(crate) fn column(&self) -> usize {
-        self.location.column
+        self.location.column()
     }
 
     pub(crate) fn note(&self) -> &'static str {

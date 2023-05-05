@@ -25,7 +25,7 @@ use crate::{
     ast::*,
     diagnostic::{ParseDiagnostic, ParseDiagnosticKind},
     error::ParseError,
-    Range, Span,
+    location::{Range, Span},
 };
 use expansion::*;
 use quoted::*;

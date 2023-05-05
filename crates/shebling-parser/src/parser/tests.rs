@@ -16,16 +16,13 @@ macro_rules! assert_diag_eq {
         ::pretty_assertions::assert_str_eq!(actual_code, expected_code);
 
         // Check the range coordinates.
-        let $crate::Range { start, end } = $diag.range();
-        ::pretty_assertions::assert_eq!(start.line, $line1, "Actual start line: {}", start.line);
-        ::pretty_assertions::assert_eq!(
-            start.column,
-            $col1,
-            "Actual start column: {}",
-            start.column
-        );
-        ::pretty_assertions::assert_eq!(end.line, $line2, "Actual end line: {}", end.line);
-        ::pretty_assertions::assert_eq!(end.column, $col2, "Actual end column: {}", end.column);
+        let (start, end) = ($diag.range().start(), $diag.range().end());
+        let (line, column) = (start.line(), start.column());
+        ::pretty_assertions::assert_eq!(line, $line1, "Actual start line: {}", line);
+        ::pretty_assertions::assert_eq!(column, $col1, "Actual start column: {}", column);
+        let (line, column) = (end.line(), end.column());
+        ::pretty_assertions::assert_eq!(line, $line2, "Actual end line: {}", line);
+        ::pretty_assertions::assert_eq!(column, $col2, "Actual end column: {}", column);
     };
 }
 

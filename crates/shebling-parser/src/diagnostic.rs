@@ -1,6 +1,7 @@
-use crate::Range;
 use std::fmt;
 use thiserror::Error;
+
+use crate::location::Range;
 
 type LabeledRange = (String, Range);
 
