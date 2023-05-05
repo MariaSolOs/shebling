@@ -312,3 +312,82 @@ pub(crate) struct Subscript {
     content: String,
 }
 // endregion
+
+// region: Conditional expressions.
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CondOp {
+    #[new(into)]
+    op: String,
+}
+
+impl From<BinOp> for CondOp {
+    fn from(value: BinOp) -> Self {
+        Self::new(value.token())
+    }
+}
+
+impl From<UnOp> for CondOp {
+    fn from(value: UnOp) -> Self {
+        Self::new(value.token())
+    }
+}
+
+impl<S: AsRef<str> + ?Sized> PartialEq<S> for CondOp {
+    fn eq(&self, other: &S) -> bool {
+        self.op == other.as_ref()
+    }
+}
+
+impl PartialEq<BinOp> for CondOp {
+    fn eq(&self, other: &BinOp) -> bool {
+        self.op == other.token()
+    }
+}
+
+impl PartialEq<UnOp> for CondOp {
+    fn eq(&self, other: &UnOp) -> bool {
+        self.op == other.token()
+    }
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum CondExpr {
+    BinExpr(CondBinExpr),
+    Group(CondGroup),
+    UnExpr(CondUnExpr),
+    Word(Word),
+}
+
+pub(crate) type CondBinExpr = BinExpr<CondOp, CondExpr>;
+
+pub(crate) type CondUnExpr = UnExpr<CondOp, CondExpr>;
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CondGroup {
+    #[new(into)]
+    group: Box<CondExpr>,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct Cond {
+    single_bracketed: bool,
+    expr: Option<CondExpr>,
+}
+
+impl Cond {
+    pub(crate) fn new(single_bracketed: bool) -> Self {
+        Self {
+            single_bracketed,
+            expr: None,
+        }
+    }
+
+    pub(crate) fn with_expr(single_bracketed: bool, expr: impl Into<CondExpr>) -> Self {
+        Self {
+            single_bracketed,
+            expr: Some(expr.into()),
+        }
+    }
+}
+// endregion

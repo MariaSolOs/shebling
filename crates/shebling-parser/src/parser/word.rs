@@ -96,6 +96,36 @@ pub(super) fn lit_word_sgmt<'a>(
     into(lit(lit_string(end_pattern)))
 }
 
+pub(super) fn word(span: Span) -> ParseResult<Word> {
+    let (span, (word, range)) = ranged(map(
+        context("expected a non-empty word!", many1(word_sgmt)),
+        Word::new,
+    ))(span)?;
+
+    // TODO // Check for misplaced keywords.
+    // if let Some(lit) = word.as_lit() {
+    //     let lit = lit.value();
+    //     if vec![
+    //         Keyword::Do,
+    //         Keyword::Done,
+    //         Keyword::Esac,
+    //         Keyword::Fi,
+    //         Keyword::Then,
+    //     ]
+    //     .into_iter()
+    //     .any(|keyword| keyword.token() == lit)
+    //     {
+    //         span.extra.report(Lint::with_message(
+    //             range,
+    //             LITERAL_KEYWORD,
+    //             format_literal_keyword(lit),
+    //         ));
+    //     }
+    // }
+
+    Ok((span, word))
+}
+
 pub(super) fn word_sgmt(span: Span) -> ParseResult<WordSgmt> {
     word_sgmt_before_pattern("")(span)
 }
@@ -107,7 +137,7 @@ fn word_sgmt_before_pattern<'a>(
         // Curly that's not a keyword.
         let (span, (curly, range)) = ranged(one_of("{}"))(span)?;
         span.extra.diag(
-            ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedChar)
+            ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
                 .label("literal curly", range)
                 .help("If intended, quote it. Else add a semicolon or new line before it."),
         );
@@ -186,6 +216,11 @@ mod tests {
         assert_parse!(lit("") => Err(1, 1));
         // If not escaped, it cannot be a special character.
         assert_parse!(lit("$") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_word() {
+        // TODO
     }
 
     #[test]

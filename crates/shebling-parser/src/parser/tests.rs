@@ -115,4 +115,8 @@ macro_rules! assert_parse {
 pub(crate) fn arith_number(n: &str) -> ArithExpansion {
     ArithExpansion::new(vec![Lit::new(n).into()])
 }
+
+pub(crate) fn lit_word(lit: &str) -> Word {
+    Word::new(vec![Lit::new(lit).into()])
+}
 // endregion

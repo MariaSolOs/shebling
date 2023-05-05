@@ -22,6 +22,17 @@ impl Location {
     pub(crate) fn column(&self) -> usize {
         self.column
     }
+
+    /// Translates the location by the given offset.
+    ///
+    /// This method won't panic, since it saturates at the numeric bounds
+    /// instead of overflowing.
+    pub(crate) fn translate(mut self, offset: isize) -> Self {
+        self.offset = self.offset.saturating_add_signed(offset);
+        self.column = self.column.saturating_add_signed(offset);
+
+        self
+    }
 }
 
 impl<'a, S> From<S> for Location

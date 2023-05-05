@@ -33,6 +33,12 @@ pub(super) fn line_space(span: Span) -> ParseResult<char> {
     }))(span)
 }
 
+pub(super) fn multi_trivia(span: Span) -> ParseResult<String> {
+    map(separated_list0(line_ending, trivia), |trivia| {
+        trivia.join("\n")
+    })(span)
+}
+
 pub(super) fn trivia(span: Span) -> ParseResult<String> {
     fn continued(span: Span) -> ParseResult<Vec<char>> {
         let (span, (mut continued, comment)) = preceded(
@@ -72,7 +78,7 @@ pub(super) fn trivia(span: Span) -> ParseResult<String> {
     )(span)
 }
 
-fn trivia1(span: Span) -> ParseResult<String> {
+pub(super) fn trivia1(span: Span) -> ParseResult<String> {
     context(
         "expected whitespace!",
         verify(trivia, |trivia: &str| !trivia.is_empty()),
@@ -146,6 +152,21 @@ mod tests {
 
         // Not a space.
         assert_parse!(line_space("\n") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_multi_trivia() {
+        // It's okay if some lines are empty.
+        assert_parse!(multi_trivia("\n \n") => "", "\n \n");
+
+        // Multiple comments.
+        assert_parse!(multi_trivia("# foo \n #bar\n") => "", "# foo \n #bar\n");
+
+        // Handle line continuations.
+        assert_parse!(multi_trivia("\\\n# foo") => "", "# foo");
+
+        // Stop when we should.
+        assert_parse!(multi_trivia(" foo") => "foo", " ");
     }
 
     #[test]

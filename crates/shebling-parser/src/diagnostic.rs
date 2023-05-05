@@ -78,6 +78,12 @@ impl ParseDiagnosticBuilder {
         self
     }
 
+    /// Adds a [LabeledRange] with an empty message to the [ParseDiagnostic].
+    pub(crate) fn range(mut self, range: impl Into<Range>) -> Self {
+        self.labels.push(("".into(), range.into()));
+        self
+    }
+
     /// Sets the help message of the [ParseDiagnostic].
     ///
     /// # Panics
@@ -115,9 +121,17 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::parser::bad_space))]
     BadSpace,
 
+    #[error("Incorrect shell syntax!")]
+    #[diagnostic(code(shebling::parser::c_like_code))]
+    CLikeCode,
+
     #[error("You should escape this character.")]
     #[diagnostic(code(shebling::parser::missing_escape))]
     MissingEscape,
+
+    #[error("You need a space here.")]
+    #[diagnostic(code(shebling::parser::missing_space))]
+    MissingSpace,
 
     #[error("You're missing some curlies here.")]
     #[diagnostic(code(shebling::parser::unbraced))]

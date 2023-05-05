@@ -42,41 +42,40 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    // let diags: Vec<ParseDiagnostic> = expansion::arith_seq(source_to_span(source_code))
-    //     .finish()
-    //     .unwrap()
-    //     .0
-    //     .extra
-    //     .take_diags();
+    match command::cond(source_to_span(source_code)).finish() {
+        Ok((span, res)) => {
+            // println!("{:#?}", res);
+            let diags: Vec<ParseDiagnostic> = span.extra.take_diags();
 
-    // let source_code = Arc::new(miette::NamedSource::new(
-    //     file_path,
-    //     source_code.to_owned() + "\n",
-    // ));
-    // for diag in diags {
-    //     println!(
-    //         "{:?}",
-    //         Report::new(diag).with_source_code(Arc::clone(&source_code))
-    //     );
-    // }
-
-    // let err = single_quoted(source_to_span(source_code))
-    //     .finish()
-    //     .unwrap_err();
-    // let source_code = Arc::new(miette::NamedSource::new(
-    //     file_path,
-    //     source_code.to_owned() + "\n",
-    // ));
-    // println!(
-    //     "{:?}",
-    //     Report::new(err).with_source_code(Arc::clone(&source_code))
-    // );
-    // for diag in err.diags {
-    //     println!(
-    //         "{:?}",
-    //         Report::new(diag).with_source_code(Arc::clone(&source_code))
-    //     );
-    // }
+            let source_code = Arc::new(miette::NamedSource::new(
+                file_path,
+                source_code.to_owned() + "\n",
+            ));
+            for diag in diags {
+                println!(
+                    "{:?}",
+                    Report::new(diag).with_source_code(Arc::clone(&source_code))
+                );
+            }
+        }
+        Err(err) => {
+            let diags = err.diags();
+            let source_code = Arc::new(miette::NamedSource::new(
+                file_path,
+                source_code.to_owned() + "\n",
+            ));
+            for diag in diags {
+                println!(
+                    "{:?}",
+                    Report::new(diag.clone()).with_source_code(Arc::clone(&source_code))
+                );
+            }
+            println!(
+                "{:?}",
+                Report::new(err).with_source_code(Arc::clone(&source_code))
+            );
+        }
+    }
 }
 
 // region: Shared utility parsers.

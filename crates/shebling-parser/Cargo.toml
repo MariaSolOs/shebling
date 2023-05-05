@@ -8,6 +8,7 @@ edition = "2021"
 miette = { version = "5.8.0", features = ["fancy"] }
 nom = "7.1.3"
 nom_locate = "4.1.0"
+once_cell = "1.17.1"
 shebling-codegen = { version = "=0.1.0", path = "../shebling-codegen" }
 thiserror = "1.0.40"
 
