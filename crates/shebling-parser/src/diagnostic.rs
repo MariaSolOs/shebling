@@ -127,9 +127,9 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::parser::unclosed_string))]
     UnclosedString,
 
-    #[error("Unexpected character!")]
-    #[diagnostic(code(shebling::parser::unexpected_char))]
-    UnexpectedChar,
+    #[error("Unexpected token!")]
+    #[diagnostic(code(shebling::parser::unexpected_token))]
+    UnexpectedToken,
 
     #[error("Unicode character!")]
     #[diagnostic(code(shebling::parser::unichar), help("Delete and retype it."))]

@@ -5,7 +5,7 @@ const UNISPACES: &str = "\u{A0}\u{200B}";
 fn carriage_return(span: Span) -> ParseResult<char> {
     let (span, (cr, range)) = ranged(char('\r'))(span)?;
     span.extra.diag(
-        ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedChar)
+        ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
             .label("carriage return", range)
             .help("Try running the script through tr -d '\\r'."),
     );
@@ -93,7 +93,7 @@ mod tests {
         assert_parse!(
             carriage_return("\r") => "",
             '\r',
-            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedChar)]
+            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedToken)]
         );
 
         // Not a CR.
@@ -122,13 +122,13 @@ mod tests {
         assert_parse!(
             line_ending("\r\n") => "",
             '\n',
-            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedChar)]
+            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedToken)]
         );
 
         // Missing the new line.
         assert_parse!(line_ending("\r") => Err(
             (1, 2),
-            Diags: [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedChar)]
+            Diags: [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedToken)]
         ));
 
         // Not a new line at all.
