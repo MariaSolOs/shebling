@@ -237,6 +237,33 @@ pub(crate) enum DoubleQuotedSgmt {
 // endregion
 
 // region: Words.
+tokenizable! {
+    /// Reserved words that have special meaning to the shell. They are used to
+    /// begin and end the shell's compound commands.
+    ///
+    /// Note that [bash](https://www.gnu.org/software/bash/manual/bash.html#Reserved-Words)
+    /// also considers `!`, `[[`, `]]`, `{` and `}` to be keywords, but because
+    /// their parsing depends on where they appear, we don't include them here.
+    enum Keyword {
+        Case("case"),
+        Coproc("coproc"),
+        Do("do"),
+        Done("done"),
+        Elif("elif"),
+        Else("else"),
+        Esac("esac"),
+        Fi("fi"),
+        For("for"),
+        Function("function"),
+        If("if"),
+        In("in"),
+        Select("select"),
+        Then("then"),
+        Until("until"),
+        While("while"),
+    }
+}
+
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Word {
     sgmts: Vec<WordSgmt>,

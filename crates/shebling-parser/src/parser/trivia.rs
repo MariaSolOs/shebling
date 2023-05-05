@@ -39,6 +39,13 @@ pub(super) fn multi_trivia(span: Span) -> ParseResult<String> {
     })(span)
 }
 
+pub(super) fn multi_trivia1(span: Span) -> ParseResult<String> {
+    context(
+        "expected whitespace!",
+        verify(multi_trivia, |trivia: &String| !trivia.is_empty()),
+    )(span)
+}
+
 pub(super) fn trivia(span: Span) -> ParseResult<String> {
     fn continued(span: Span) -> ParseResult<Vec<char>> {
         let (span, (mut continued, comment)) = preceded(

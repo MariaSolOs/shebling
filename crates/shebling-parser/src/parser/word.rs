@@ -102,26 +102,26 @@ pub(super) fn word(span: Span) -> ParseResult<Word> {
         Word::new,
     ))(span)?;
 
-    // TODO // Check for misplaced keywords.
-    // if let Some(lit) = word.as_lit() {
-    //     let lit = lit.value();
-    //     if vec![
-    //         Keyword::Do,
-    //         Keyword::Done,
-    //         Keyword::Esac,
-    //         Keyword::Fi,
-    //         Keyword::Then,
-    //     ]
-    //     .into_iter()
-    //     .any(|keyword| keyword.token() == lit)
-    //     {
-    //         span.extra.report(Lint::with_message(
-    //             range,
-    //             LITERAL_KEYWORD,
-    //             format_literal_keyword(lit),
-    //         ));
-    //     }
-    // }
+    // Check for misplaced keywords.
+    if let Some(lit) = word.as_lit() {
+        let lit = lit.value();
+        if vec![
+            Keyword::Do,
+            Keyword::Done,
+            Keyword::Esac,
+            Keyword::Fi,
+            Keyword::Then,
+        ]
+        .into_iter()
+        .any(|keyword| keyword.token() == lit)
+        {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                    .label(format!("literal {}", lit), range)
+                    .help("If intended, quote it. Else add a semicolon or new line before it."),
+            );
+        }
+    }
 
     Ok((span, word))
 }
