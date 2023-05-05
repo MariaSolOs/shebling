@@ -20,8 +20,6 @@ fn parse_token<'a, T: Token>(token: T) -> impl FnMut(Span<'a>) -> ParseResult<T>
 
 impl ParseToken for BinOp {}
 
-impl ParseToken for UnOp {}
-
 impl ParseToken for Keyword {
     fn parse_token<'a>(self, span: Span<'a>) -> ParseResult<'a, Self> {
         let keyword = self.token();
@@ -60,6 +58,14 @@ impl ParseToken for Keyword {
         }
     }
 }
+
+impl ParseToken for RedirOp {
+    fn parse_token<'a>(self, span: Span<'a>) -> ParseResult<'a, Self> {
+        terminated(parse_token(self), trivia)(span)
+    }
+}
+
+impl ParseToken for UnOp {}
 
 /// Creates a parser for the given [ParseToken].
 pub(super) fn token<'a, P: ParseToken>(token: P) -> impl FnMut(Span<'a>) -> ParseResult<P> {

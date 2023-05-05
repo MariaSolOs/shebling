@@ -5,6 +5,7 @@ mod tests;
 mod command;
 mod expansion;
 mod quoted;
+mod redirection;
 mod token;
 mod trivia;
 mod word;

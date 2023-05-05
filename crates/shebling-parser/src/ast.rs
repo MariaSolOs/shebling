@@ -423,3 +423,34 @@ impl Cond {
     }
 }
 // endregion
+
+// region: Redirections.
+tokenizable! {
+    enum RedirOp {
+        Clobber(">|"),
+        DGreat(">>"),
+        DLess("<<"),
+        Great(">"),
+        GreatAnd(">&"),
+        Less("<"),
+        LessAnd("<&"),
+        LessGreat("<>"),
+        TLess("<<<"),
+    }
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum FileDesc {
+    Number,
+    StdOutErr,
+    Variable(Variable),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Redir {
+    file_desc: Option<FileDesc>,
+    op: RedirOp,
+    word: Word,
+}
+// endregion
