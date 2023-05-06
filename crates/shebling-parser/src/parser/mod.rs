@@ -30,6 +30,7 @@ use crate::{
 };
 use expansion::*;
 use quoted::*;
+use redirection::*;
 use token::*;
 use trivia::*;
 use word::*;
@@ -43,10 +44,10 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    match brace_expansion(source_to_span(source_code)).finish() {
+    match redir(source_to_span(source_code)).finish() {
         Ok((span, res)) => {
-            println!("{:#?}", span);
-            println!("{:#?}", res);
+            // println!("{:#?}", span);
+            //println!("{:#?}", res);
             let diags: Vec<ParseDiagnostic> = span.extra.take_diags();
 
             let source_code = Arc::new(miette::NamedSource::new(

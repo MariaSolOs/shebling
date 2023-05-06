@@ -20,6 +20,17 @@ fn parse_token<'a, T: Token>(token: T) -> impl FnMut(Span<'a>) -> ParseResult<T>
 
 impl ParseToken for BinOp {}
 
+impl ParseToken for ControlOp {
+    fn parse_token<'a>(self, mut span: Span<'a>) -> ParseResult<'a, Self> {
+        // Special case for ';' since we don't want to mix it up with ';;'.
+        if let ControlOp::Semi = self {
+            (span, _) = not(token(ControlOp::DSemi))(span)?;
+        }
+
+        terminated(parse_token(self), trivia)(span)
+    }
+}
+
 impl ParseToken for Keyword {
     fn parse_token<'a>(self, span: Span<'a>) -> ParseResult<'a, Self> {
         let keyword = self.token();
@@ -79,6 +90,14 @@ pub(super) fn token<'a, P: ParseToken>(token: P) -> impl FnMut(Span<'a>) -> Pars
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_control_op_token() {
+        // Semicolons are a special case.
+        let mut parser = token(ControlOp::Semi);
+        assert_parse!(parser(";") => "", ControlOp::Semi);
+        assert_parse!(parser(";;") => Err(1, 1));
+    }
 
     #[test]
     fn test_parse_keyword_token() {

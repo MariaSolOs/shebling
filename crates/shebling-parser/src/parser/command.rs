@@ -188,7 +188,7 @@ pub(crate) static COMMON_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     ])
 });
 
-pub(super) fn cond(span: Span) -> ParseResult<Cond> {
+fn cond(span: Span) -> ParseResult<Cond> {
     fn and<'a>(single_bracketed: bool) -> impl FnMut(Span<'a>) -> ParseResult<CondExpr> {
         chained(
             move |span| maybe_negated_expr(single_bracketed)(span),
@@ -609,7 +609,7 @@ pub(super) fn cond(span: Span) -> ParseResult<Cond> {
     // Get the content (if it isn't an empty condition).
     let (span, bracket_following) = followed_by(char(']'))(span)?;
     let (span, cond) = if bracket_following && !space.is_empty() {
-        (span, Cond::new(single_bracketed))
+        (span, Cond::empty(single_bracketed))
     } else {
         map(content(single_bracketed), |expr| {
             Cond::with_expr(single_bracketed, expr)
@@ -638,6 +638,59 @@ pub(super) fn cond(span: Span) -> ParseResult<Cond> {
     }
 
     Ok((span, cond))
+}
+
+fn cond_cmd(span: Span) -> ParseResult<CondCmd> {
+    // Read the condition and suffix redirections.
+    let (span, (cond, redirs)) = pair(cond, many0(redir))(span)?;
+
+    // || or && should be used between test conditions.
+    let (span, cond_op) = opt(peek(ranged(consumed(alt((
+        value(ControlOp::AndIf, alt((tag("-a"), tag("and")))),
+        value(ControlOp::OrIf, alt((tag("-o"), tag("or")))),
+    ))))))(span)?;
+    if let Some(((bad_op, good_op), range)) = &cond_op {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::BadOperator)
+                .range(*range)
+                .help(format!(
+                    "Use {} instead of {} between test commands.",
+                    good_op.token(),
+                    bad_op
+                )),
+        );
+    }
+
+    // Check if there's a trailing word that's not keyword/operator-like.
+    let (span, (sus_token, next_word)) = pair(opt(peek_sus_token), opt(peek(ranged(word))))(span)?;
+    if let Some((_, range)) = next_word {
+        if sus_token.is_none() && cond_op.is_none() {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                    .label("unexpected parameter after condition", range)
+                    .help("You might be missing a && or ||."),
+            )
+        }
+    }
+
+    Ok((span, CondCmd::new(cond, redirs)))
+}
+
+fn peek_sus_token(span: Span) -> ParseResult<()> {
+    // Tokens that are often misplaced in compound commands.
+    alt((
+        swallow(peek(alt((
+            token(Keyword::Do),
+            token(Keyword::Done),
+            token(Keyword::Else),
+            token(Keyword::Esac),
+            token(Keyword::Elif),
+            token(Keyword::Fi),
+            token(Keyword::Then),
+        )))),
+        swallow(peek(one_of("})"))),
+        swallow(peek(token(ControlOp::DSemi))),
+    ))(span)
 }
 
 #[cfg(test)]
@@ -682,15 +735,15 @@ mod tests {
         );
 
         // New lines have to be escaped inside single brackets.
-        assert_parse!(cond("[\n]") => "", Cond::new(true), [((1, 2), (2, 1), ParseDiagnosticKind::MissingEscape)]);
+        assert_parse!(cond("[\n]") => "", Cond::empty(true), [((1, 2), (2, 1), ParseDiagnosticKind::MissingEscape)]);
 
         // Empty conditions are legal.
-        assert_parse!(cond("[[ ]]") => "", Cond::new(false));
+        assert_parse!(cond("[[ ]]") => "", Cond::empty(false));
 
         // Bracket mismatch.
         assert_parse!(
             cond("[ ]]") => "",
-            Cond::new(true),
+            Cond::empty(true),
             [((1, 3), (1, 5), ParseDiagnosticKind::UnexpectedToken)]
         );
 
@@ -753,5 +806,38 @@ mod tests {
             (1, 7),
             Diags: [((1, 6), ParseDiagnosticKind::MissingSpace)]
         ));
+    }
+
+    #[test]
+    fn test_cond_cmd() {
+        // Valid condition commands.
+        assert_parse!(
+            cond_cmd("[[ foo ]]") => "",
+            CondCmd::new(Cond::with_expr(false, tests::lit_word("foo")), vec![])
+        );
+        assert_parse!(
+            cond_cmd("[ foo ] > bar") => "",
+            CondCmd::new(
+                Cond::with_expr(true, tests::lit_word("foo")),
+                vec![Redir::new(None, RedirOp::Great, tests::lit_word("bar"))]
+            )
+        );
+
+        // Wrong operator between conditions.
+        assert_parse!(
+            cond_cmd("[ foo ] -a [ bar ]") => "-a [ bar ]",
+            CondCmd::new(Cond::with_expr(true, tests::lit_word("foo")), vec![]),
+            [((1, 9), (1, 11), ParseDiagnosticKind::BadOperator)]
+        );
+
+        // Missing the operator between conditions.
+        assert_parse!(
+            cond_cmd("[ foo ] [ bar ]") => "[ bar ]",
+            CondCmd::new(
+                Cond::with_expr(true, tests::lit_word("foo")),
+                vec![],
+            ),
+            [((1, 9), (1, 10), ParseDiagnosticKind::UnexpectedToken)]
+        );
     }
 }

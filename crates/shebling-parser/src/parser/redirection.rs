@@ -1,6 +1,6 @@
 use super::*;
 
-fn redir(span: Span) -> ParseResult<Redir> {
+pub(super) fn redir(span: Span) -> ParseResult<Redir> {
     // Read the optional file descriptor.
     let (span, desc) = context(
         "invalid file descriptor!",

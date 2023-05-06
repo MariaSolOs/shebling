@@ -408,7 +408,7 @@ pub(crate) struct Cond {
 }
 
 impl Cond {
-    pub(crate) fn new(single_bracketed: bool) -> Self {
+    pub(crate) fn empty(single_bracketed: bool) -> Self {
         Self {
             single_bracketed,
             expr: None,
@@ -453,4 +453,28 @@ pub(crate) struct Redir {
     op: RedirOp,
     word: Word,
 }
+// endregion
+
+// region: Commands.
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CondCmd {
+    cond: Cond,
+    redirs: Vec<Redir>,
+}
+// endregion
+
+// region: Command sequences.
+tokenizable! {
+    enum ControlOp {
+        And("&"),
+        AndIf("&&"),
+        DSemi(";;"),
+        Newline("\n"),
+        Or("|"),
+        OrAnd("|&"),
+        OrIf("||"),
+        Semi(";"),
+    }
+}
+
 // endregion
