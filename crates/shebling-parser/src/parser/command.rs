@@ -10,7 +10,7 @@ const UNIDASHES: &str =
     "\u{058A}\u{05BE}\u{2010}\u{2011}\u{2012}\u{2013}\u{2014}\u{2015}\u{FE63}\u{FF0D}";
 
 // TODO: Use the standard library's once_cell when it's stable.
-pub(crate) static COMMON_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+static COMMON_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     // Taken from https://github.com/koalaman/shellcheck/blob/b1ca3929e387446f3e3db023d716cf3787370437/src/ShellCheck/Data.hs#L96.
     HashSet::from_iter([
         "admin",
@@ -187,6 +187,15 @@ pub(crate) static COMMON_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "zcat",
     ])
 });
+
+fn cmd(span: Span) -> ParseResult<Cmd> {
+    alt((
+        // TODO into(compound_cmd),
+        into(cond_cmd),
+        // TODO into(coproc),
+        // TODO into(simple_cmd),
+    ))(span)
+}
 
 fn cond(span: Span) -> ParseResult<Cond> {
     fn and<'a>(single_bracketed: bool) -> impl FnMut(Span<'a>) -> ParseResult<CondExpr> {
@@ -691,6 +700,105 @@ fn peek_sus_token(span: Span) -> ParseResult<()> {
         swallow(peek(one_of("})"))),
         swallow(peek(token(ControlOp::DSemi))),
     ))(span)
+}
+
+pub(super) fn term(_span: Span) -> ParseResult<Term> {
+    // fn and_or(span: Span) -> ParseResult<Term> {
+    //     // Left-fold the pipelines into a list.
+    //     preceded(
+    //         multi_trivia,
+    //         map(
+    //             pair(
+    //                 map(pipeline, Term::Pipeline),
+    //                 many0(separated_pair(
+    //                     alt((token(ControlOp::AndIf), token(ControlOp::OrIf))),
+    //                     linebreak,
+    //                     pipeline,
+    //                 )),
+    //             ),
+    //             |(head, tail)| {
+    //                 tail.into_iter().fold(head, |acc, (op, pipeline)| {
+    //                     List::new(acc, pipeline, op).into()
+    //                 })
+    //             },
+    //         ),
+    //     )(span)
+    // }
+
+    // fn and_sep(span: Span) -> ParseResult<ControlOp> {
+    //     let (span, (sep_start, and)) = pair(nom_locate::position, token(ControlOp::And))(span)?;
+
+    //     // Warn if the `&` seems to begin an HTML entity.
+    //     let (mut span, entity_end) = opt(peek(preceded(
+    //         pair(
+    //             alt((
+    //                 preceded(char('#'), digit1),
+    //                 preceded(tag("#x"), alphanumeric1),
+    //                 alpha1,
+    //             )),
+    //             char(';'),
+    //         ),
+    //         nom_locate::position,
+    //     )))(span)?;
+    //     if let Some(entity_end) = entity_end {
+    //         span.extra
+    //             .report(Lint::new(Range::new(&sep_start, entity_end), HTML_ENTITY));
+    //     } else {
+    //         // Warn if the `&` might be ending a command by mistake (e.g. it is in a URL).
+    //         let alpha_char;
+    //         (span, alpha_char) =
+    //             followed_by(satisfy(|c| c == '_' || c.is_ascii_alphabetic()))(span)?;
+    //         if alpha_char {
+    //             span.extra
+    //                 .report(Lint::new(Range::new(&sep_start, &span), UNSPACED_AMP));
+    //         }
+    //     }
+
+    //     // Warn about redundant `;`s.
+    //     let (span, semi_end) = preceded(
+    //         trivia,
+    //         opt(delimited(
+    //             token(ControlOp::Semi),
+    //             nom_locate::position,
+    //             not(token(ControlOp::Semi)),
+    //         )),
+    //     )(span)?;
+    //     if let Some(semi_end) = semi_end {
+    //         span.extra
+    //             .report(Lint::new(Range::new(sep_start, semi_end), AMP_SEMI));
+    //     }
+
+    //     Ok((span, and))
+    // }
+
+    // fn sep(span: Span) -> ParseResult<ControlOp> {
+    //     alt((
+    //         terminated(
+    //             alt((
+    //                 terminated(
+    //                     and_sep,
+    //                     // Don't parse `&&` or `&>`.
+    //                     not(one_of("&>")),
+    //                 ),
+    //                 // Don't parse clause operators.
+    //                 terminated(token(ControlOp::Semi), not(one_of(";&"))),
+    //             )),
+    //             linebreak,
+    //         ),
+    //         value(ControlOp::Newline, newline_list),
+    //     ))(span)
+    // }
+
+    // let (span, term) = map(pair(and_or, many0(pair(sep, and_or))), |(head, tail)| {
+    //     tail.into_iter()
+    //         .fold(head, |acc, (op, and_or)| List::new(acc, and_or, op).into())
+    // })(span)?;
+
+    // // Read the optional terminator.
+    // let (span, _) = opt(sep)(span)?;
+
+    // Ok((span, term))
+    todo!()
 }
 
 #[cfg(test)]

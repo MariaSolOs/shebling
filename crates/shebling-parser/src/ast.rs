@@ -230,9 +230,15 @@ pub(crate) struct DoubleQuoted {
 #[from_structs]
 #[derive(Debug, PartialEq)]
 pub(crate) enum DoubleQuotedSgmt {
-    // TODO BackQuoted(BackQuoted),
+    BackQuoted(BackQuoted),
     Lit(Lit),
     DollarExp(DollarExp),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct BackQuoted {
+    #[new(into)]
+    cmd: Term,
 }
 // endregion
 
@@ -290,7 +296,7 @@ impl Word {
 #[from_structs]
 #[derive(Debug, PartialEq)]
 pub(crate) enum WordSgmt {
-    // TODO BackQuoted(BackQuoted),
+    BackQuoted(BackQuoted),
     BraceExpansion(BraceExpansion),
     DollarExp(DollarExp),
     DoubleQuoted(DoubleQuoted),
@@ -456,6 +462,15 @@ pub(crate) struct Redir {
 // endregion
 
 // region: Commands.
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum Cmd {
+    // TODO Compound(CompoundCmd),
+    Cond(CondCmd),
+    // TODO Coproc(Coproc),
+    // TODO Simple(SimpleCmd),
+}
+
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CondCmd {
     cond: Cond,
@@ -477,4 +492,17 @@ tokenizable! {
     }
 }
 
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum Term {
+    List(List),
+    Pipeline(Pipeline),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Pipeline {
+    cmds: Vec<Cmd>,
+}
+
+pub(crate) type List = BinExpr<ControlOp, Term>;
 // endregion

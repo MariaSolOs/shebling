@@ -1,8 +1,59 @@
 use super::*;
+use crate::ParseContext;
 
 pub(super) const DOUBLE_ESCAPABLE: &str = "\\\"$`";
 pub(super) const DOUBLE_UNIQUOTES: &str = "\u{201C}\u{201D}\u{2033}\u{2036}";
 pub(super) const SINGLE_UNIQUOTES: &str = "\u{2018}\u{2019}";
+
+pub(super) fn backquoted(escape_double_quotes: bool) -> impl Fn(Span) -> ParseResult<BackQuoted> {
+    fn backquote(span: Span) -> ParseResult<Span> {
+        alt((tag("`"), |span| {
+            let (span, (tick, range)) = ranged(tag("´"))(span)?;
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                    .label("forward tick", range)
+                    .help("For command expansion, use backticks (``)."),
+            );
+
+            Ok((span, tick))
+        }))(span)
+    }
+
+    move |span| {
+        // Parse the quotes and the command string.
+        let (span, (start_quote, cmd_start)) = pair(backquote, position)(span)?;
+        let (span, cmd) = many0(alt((
+            escaped(if escape_double_quotes {
+                "$`\\\""
+            } else {
+                "$`\\"
+            }),
+            recognize_string(is_not("\\`´")),
+        )))(span)?;
+        let (span, end_quote) = backquote(span)?;
+        let cmd = cmd.concat();
+
+        // Does this look like an unclosed string?
+        let (span, sus_next_char) = followed_by(satisfy(is_sus_char_after_quote))(span)?;
+        if sus_next_char && !cmd.starts_with('\n') && cmd.contains('\n') {
+            report_unclosed_string(&span, start_quote, end_quote);
+        }
+
+        // Subparse the quoted content.
+        let cmd_span = unsafe {
+            Span::new_from_raw_offset(
+                cmd_start.location_offset(),
+                cmd_start.location_line(),
+                &cmd,
+                ParseContext::new(),
+            )
+        };
+        let (cmd_span, cmd) = all_consuming(preceded(multi_trivia, term))(cmd_span)?;
+        span.extra.extend_diags(cmd_span.extra);
+
+        Ok((span, BackQuoted::new(cmd)))
+    }
+}
 
 pub(super) fn backslash(span: Span) -> ParseResult<char> {
     char('\\')(span)
@@ -14,7 +65,7 @@ pub(super) fn double_quoted(span: Span) -> ParseResult<DoubleQuoted> {
     let (span, sgmts) = many0(alt((
         into(dollar_exp),
         into(double_quoted_lit),
-        // TODO into(backquoted(true)),
+        into(backquoted(true)),
         into(lit(double_uniquote)),
     )))(span)?;
     let (span, end) = cut(context("Expected end of double quoted string!", tag("\"")))(span)?;
@@ -197,6 +248,29 @@ fn report_unclosed_string(span: &Span, start: Span, end: Span) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_backquoted() {
+        // TODO: Uncomment when adding pipeline parsing.
+        // // Lint for the wrong kind of backquote.
+        // assert_parse!(
+        //     backquoted("´foo´") => "",
+        //     BackQuoted::new(lit_pipeline("foo")),
+        //     [((1, 1), (1, 2), FORWARD_TICKED), ((1, 5), (1, 6), FORWARD_TICKED)]
+        // );
+        // // Unclosed string warning.
+        // assert_parse!(
+        //     backquoted("`foo\n`bar") => "bar",
+        //     BackQuoted::new(lit_pipeline("foo")),
+        //     [((1, 1), (2, 1), UNCLOSED_STRING), ((2, 1), SUS_CHAR_AFTER_QUOTE)]
+        // );
+        // // Make sure lints from the subparser are included.
+        // assert_parse!(
+        //     backquoted("`foo\\nbar`") => "",
+        //     BackQuoted::new(lit_pipeline("foonbar")),
+        //     [((1, 5), (1, 7), UNESCAPED_WHITESPACE)]
+        // );
+    }
 
     #[test]
     fn test_double_quoted() {

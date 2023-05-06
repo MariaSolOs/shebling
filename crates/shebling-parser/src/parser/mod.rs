@@ -14,7 +14,10 @@ use nom::{
     branch::alt,
     bytes::complete::{is_a, is_not, tag, tag_no_case},
     character::complete::{alpha1, alphanumeric1, anychar, char, digit1, newline, one_of, satisfy},
-    combinator::{consumed, cut, eof, fail, into, map, not, opt, peek, recognize, value, verify},
+    combinator::{
+        all_consuming, consumed, cut, eof, fail, into, map, not, opt, peek, recognize, value,
+        verify,
+    },
     error::context,
     multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -28,6 +31,7 @@ use crate::{
     error::ParseError,
     location::{Range, Span},
 };
+use command::*;
 use expansion::*;
 use quoted::*;
 use redirection::*;

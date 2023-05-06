@@ -163,7 +163,7 @@ fn word_sgmt_before_pattern<'a>(
             into(lit(one_of("@!+["))),
             // TODO unquoted_dollar_sgmt,
             into(brace_expansion),
-            // TODO  into(backquoted(false)),
+            into(backquoted(false)),
             // TODO into(proc_sub),
             into(lit(alt((single_uniquote, double_uniquote)))),
             lit_word_sgmt(pattern),
