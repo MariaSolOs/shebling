@@ -25,11 +25,12 @@ pub(super) fn redir(span: Span) -> ParseResult<Redir> {
         context("expected a redirection operator!", peek(one_of("<>"))),
         alt((
             // Here strings:
-            pair(token(RedirOp::TLess), word),
+            separated_pair(token(RedirOp::TLess), trivia, word),
             // TODO: readHereDoc
             // File descriptor duplication:
-            pair(
+            separated_pair(
                 alt((token(RedirOp::GreatAnd), token(RedirOp::LessAnd))),
+                trivia,
                 // The word can be a variable, or a digit optionally followed by a dash,
                 // or a dash.
                 map(
@@ -42,7 +43,7 @@ pub(super) fn redir(span: Span) -> ParseResult<Redir> {
                 ),
             ),
             // Redirection from/to a file.
-            pair(
+            separated_pair(
                 alt((
                     token(RedirOp::DGreat),
                     token(RedirOp::LessGreat),
@@ -53,6 +54,7 @@ pub(super) fn redir(span: Span) -> ParseResult<Redir> {
                     token(RedirOp::Less),
                     token(RedirOp::Great),
                 )),
+                trivia,
                 word,
             ),
         )),

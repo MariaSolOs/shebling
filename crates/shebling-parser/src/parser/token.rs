@@ -27,7 +27,7 @@ impl ParseToken for ControlOp {
             (span, _) = not(token(ControlOp::DSemi))(span)?;
         }
 
-        terminated(parse_token(self), trivia)(span)
+        parse_token(self)(span)
     }
 }
 
@@ -37,44 +37,36 @@ impl ParseToken for Keyword {
 
         let (span, word) = recognize_string(tag_no_case(keyword))(span)?;
 
-        let span = if self == Keyword::Function {
+        let (span, missing_space) = if self == Keyword::Function {
             // Special case for 'function', since they can only be followed
             // (and have to) by horizontal whitespace.
-            let (span, _) = context("missing a space!", many1(line_space))(span)?;
-
-            span
+            map(followed_by(line_space), |space| !space)(span)?
         } else {
             // Keywords followed by '[', '#', '!', or ':' need a space between them.
-            let (span, sus_char) = followed_by(one_of("[#!:"))(span)?;
-            if sus_char {
-                span.extra
-                    .diag(ParseDiagnostic::builder(ParseDiagnosticKind::MissingSpace).range(&span));
-            }
-
-            // Reserved words must be at the end of the file or followed by space or a metacharacter.
-            let (span, _) = peek(alt((
-                swallow(eof),
-                swallow(multi_trivia1),
-                swallow(one_of(";()<>&|")),
-            )))(span)?;
-
-            span
+            followed_by(one_of("[#!:"))(span)?
         };
+        if missing_space {
+            span.extra
+                .diag(ParseDiagnostic::builder(ParseDiagnosticKind::MissingSpace).range(&span));
+        }
+
+        // Reserved words must be at the end of the file or followed by space or a metacharacter.
+        let (span, _) = peek(alt((
+            swallow(eof),
+            swallow(multi_trivia1),
+            swallow(one_of(";()<>&|")),
+        )))(span)?;
 
         if word != keyword {
             context("keywords should be lower-cased!", fail)(span)
         } else {
-            // Parse trailing trivia and return the keyword.
-            value(self, trivia)(span)
+            // Return the keyword.
+            Ok((span, self))
         }
     }
 }
 
-impl ParseToken for RedirOp {
-    fn parse_token<'a>(self, span: Span<'a>) -> ParseResult<'a, Self> {
-        terminated(parse_token(self), trivia)(span)
-    }
-}
+impl ParseToken for RedirOp {}
 
 impl ParseToken for UnOp {}
 
@@ -105,17 +97,21 @@ mod tests {
         let mut parser = token(Keyword::If);
         assert_parse!(parser("if[") => Err((1, 3), Diags: [((1, 3), ParseDiagnosticKind::MissingSpace)]));
 
-        // Have to be followed by space or metacharacter.
+        // Have to be followed by the end of the file, space, or a metacharacter.
         assert_parse!(parser("if") => "", Keyword::If);
-        assert_parse!(parser("if ") => "", Keyword::If);
+        assert_parse!(parser("if ") => " ", Keyword::If);
         assert_parse!(parser("if;") => ";", Keyword::If);
 
         // Fail with bad casing.
         assert_parse!(parser("If") => Err((1, 3), Notes: [((1, 3), "keywords should be lower-cased")]));
 
-        // Make sure that function is always followed by horizontal whitespace.
+        // Make sure that 'function' is always followed by horizontal whitespace.
         parser = token(Keyword::Function);
-        assert_parse!(parser("function foo") => "foo", Keyword::Function);
-        assert_parse!(parser("function") => Err((1, 9), Notes: [((1, 9), "missing a space")]));
+        assert_parse!(parser("function foo") => " foo", Keyword::Function);
+        assert_parse!(
+            parser("function") => "",
+            Keyword::Function,
+            [((1, 9), ParseDiagnosticKind::MissingSpace)]
+        );
     }
 }
