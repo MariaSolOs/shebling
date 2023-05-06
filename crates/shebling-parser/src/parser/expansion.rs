@@ -234,8 +234,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                         identifier,
                         many0(delimited(
                             char('['),
-                            // These will be parsed later based on the array being associative or not.
-                            // TODO: Actually do that ^^
+                            // TODO: Parse these later based on the array being associative or not.
                             map(recognize_string(arith_seq), Subscript::new),
                             char(']'),
                         )),
@@ -246,7 +245,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                     many1(alt((
                         into(single_quoted),
                         into(double_quoted),
-                        // TODO unquoted_dollar_sgmt,
+                        unquoted_dollar_sgmt,
                         into(brace_expansion),
                         into(backquoted(false)),
                         into(lit(char('#'))),
@@ -341,6 +340,31 @@ pub(super) fn brace_expansion(span: Span) -> ParseResult<BraceExpansion> {
     braced(span)
 }
 
+fn dollar_cmd_expansion(span: Span) -> ParseResult<DollarCmdExpansion> {
+    delimited(
+        tuple((tag("${"), whitespace, multi_trivia)),
+        map(term, DollarCmdExpansion::new),
+        context("expected a closing }", char('}')),
+    )(span)
+}
+
+pub(super) fn dollar_cmd_sub(span: Span) -> ParseResult<DollarCmdSub> {
+    delimited(
+        pair(tag("$("), multi_trivia),
+        map(
+            alt((
+                // Parse the substitution, which can be empty.
+                map(peek(alt((char(')'), value(char::default(), eof)))), |_| {
+                    None
+                }),
+                map(term, Some),
+            )),
+            DollarCmdSub::new,
+        ),
+        context("expected a closing )", char(')')),
+    )(span)
+}
+
 pub(super) fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
     preceded(
         // Make sure we don't try all these if there's no $.
@@ -358,11 +382,11 @@ pub(super) fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
                     )),
                 ),
             ),
-            // TODO into(dollar_cmd_sub),
+            into(dollar_cmd_sub),
             // TODO: Consider error SC1102.
             // Math in $[].
             delimited(pair(char('$'), char('[')), into(arith_seq), char(']')),
-            // TODO into(dollar_cmd_expansion),
+            into(dollar_cmd_expansion),
             into(param_expansion),
             into(dollar_variable),
         )),
@@ -448,7 +472,7 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
                 // Special characters in parameter expansions.
                 into(lit(recognize_string(is_a("/:+-=%")))),
                 into(extglob),
-                // TODO: unquoted_dollar_sgmt,
+                unquoted_dollar_sgmt,
                 into(backquoted(false)),
                 map(
                     // Literals, with maybe some escaped characters.
@@ -463,6 +487,18 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
         ),
         ParamExpansion::new,
     )(span)
+}
+
+pub(super) fn unquoted_dollar_sgmt(span: Span) -> ParseResult<WordSgmt> {
+    alt((
+        into(alt((
+            dollar_exp,
+            // $"" and $'' strings.
+            preceded(char('$'), alt((into(double_quoted), into(single_quoted)))),
+        ))),
+        // A lonely dollar.
+        into(lit(char('$'))),
+    ))(span)
 }
 
 #[cfg(test)]
@@ -509,21 +545,20 @@ mod tests {
         );
 
         // Groups and dollar expressions.
-        // TODO: Uncomment when adding dollar expressions.
-        // assert_parse!(
-        //     arith_seq("($x ** 2)") => "",
-        //     ArithSeq::new(vec![
-        //         ArithGroup::new(ArithSeq::new(vec![
-        //             ArithBinExpr::new(
-        //                 ArithExpansion::new(vec![
-        //                     DollarExp::Variable(Variable::new("x")).into(),
-        //                 ]),
-        //                 tests::arith_number("2"),
-        //                 BinOp::Pow,
-        //             ).into(),
-        //         ])).into()
-        //     ])
-        // );
+        assert_parse!(
+            arith_seq("($x ** 2)") => "",
+            ArithSeq::new(vec![
+                ArithGroup::new(ArithSeq::new(vec![
+                    ArithBinExpr::new(
+                        ArithExpansion::new(vec![
+                            DollarExp::Variable(Variable::new("x")).into(),
+                        ]),
+                        tests::arith_number("2"),
+                        BinOp::Pow,
+                    ).into(),
+                ])).into()
+            ])
+        );
 
         // A list of assignments.
         assert_parse!(
@@ -589,6 +624,55 @@ mod tests {
         // If there's a single element, it must be a valid sequence expression.
         assert_parse!(brace_expansion("{foo}") => Err((1, 2), Notes: [((1, 2), "invalid sequence")]));
         assert_parse!(brace_expansion("{..1}") => Err((1, 2), Notes: [((1, 2), "invalid sequence")]));
+    }
+
+    #[test]
+    fn test_dollar_cmd_expansion() {
+        // TODO: Uncomment when adding pipelines.
+        // The content can be any valid term.
+        // assert_eq!(parse("${ foo; }") => "", DollarCmdExpansion::new(lit_pipeline("foo")));
+
+        // The term needs to end with a semicolon, else the closing curly will be
+        // parsed as a literal.
+        assert_parse!(dollar_cmd_expansion("${ foo }") => Err(
+            (1, 9),
+            Notes: [((1, 9), "expected a closing }")],
+            Diags: [((1, 8), (1, 9), ParseDiagnosticKind::UnexpectedToken)]
+        ));
+
+        // There needs to be space after the {.
+        assert_parse!(dollar_cmd_expansion("${foo; }") => Err(1, 3));
+    }
+
+    #[test]
+    fn test_dollar_cmd_sub() {
+        // TODO: Uncomment when adding pipelines.
+        // // The content can be any valid term.
+        // assert_eq!(parse("$( foo )") => "", DollarCmdSub::new(Some(lit_pipeline("foo").into())));
+        // assert_eq!(
+        //     parse("$(foo; ls 'bar')") => "",
+        //     DollarCmdSub::new(Some(
+        //         List::new(
+        //             lit_pipeline("foo"),
+        //             Pipeline::new(vec![
+        //                 SimpleCmd::new(
+        //                     Some(lit_word("ls")),
+        //                     vec![],
+        //                     vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()],
+        //                 ).into()
+        //             ]),
+        //             ControlOp::Semi
+        //         ).into()
+        //     ))
+        // );
+
+        // The content can be just trivia.
+        assert_parse!(dollar_cmd_sub("$( )") => "", DollarCmdSub::new(None));
+        assert_parse!(dollar_cmd_sub("$(\n#foo\n)") => "", DollarCmdSub::new(None));
+
+        // Missing parentheses.
+        assert_parse!(dollar_cmd_sub("$)") => Err(1, 1));
+        assert_parse!(dollar_cmd_sub("$(") => Err((1, 3), Notes: [((1, 3), "expected a closing )")]));
     }
 
     #[test]

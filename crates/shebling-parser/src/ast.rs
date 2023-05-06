@@ -195,12 +195,23 @@ pub(crate) type ArithUnExpr = UnExpr<UnOp, ArithTerm>;
 #[derive(Debug, PartialEq)]
 pub(crate) enum DollarExp {
     Arith(ArithSeq),
-    // TODO CmdExpansion(DollarCmdExpansion),
-    // TODO CmdSub(DollarCmdSub),
-    // TODO DoubleQuoting(DoubleQuoted),
+    CmdExpansion(DollarCmdExpansion),
+    CmdSub(DollarCmdSub),
+    DoubleQuoting(DoubleQuoted),
     ParamExpansion(ParamExpansion),
-    // TODO SingleQuoting(SingleQuoted),
+    SingleQuoting(SingleQuoted),
     Variable(Variable),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct DollarCmdExpansion {
+    #[new(into)]
+    cmd: Term,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct DollarCmdSub {
+    cmd: Option<Term>,
 }
 
 #[derive(Debug, New, PartialEq)]
