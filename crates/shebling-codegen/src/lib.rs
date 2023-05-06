@@ -41,28 +41,34 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
         let mut assigns = Vec::with_capacity(named.len());
 
         for field in named {
-            // Get the `#[new]` attribute if present.
+            // Get the #[new] attribute if present.
             let mut new_attrs = field
                 .attrs
                 .into_iter()
                 .filter(|attr| attr.path().is_ident("new"));
 
-            // Check that there is at most one `#[new]` attribute.
+            // Check that there is at most one #[new] attribute.
             let new_attr = new_attrs.next();
             if let Some(attr) = new_attrs.next() {
-                return error(attr.span(), "Duplicate `#[new(..)]` attribute.");
+                return error(attr.span(), "duplicate #[new(...)] attribute");
             }
 
-            // Check if we should use `Into<..>` for the constructor parameter.
-            let mut use_into = false;
+            // Check if we should use Into<..> or the type's default for the
+            // constructor parameter.
+            let (mut use_into, mut use_default) = (false, false);
             if let Some(new_attr) = new_attr {
-                if let Err(err) = new_attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("into") {
+                if let Err(err) = new_attr.parse_nested_meta(|meta| match meta.path.get_ident() {
+                    Some(ident) if ident == "into" => {
                         use_into = true;
+
                         Ok(())
-                    } else {
-                        Err(meta.error("Invalid `#[new(..)]` content."))
                     }
+                    Some(ident) if ident == "default" => {
+                        use_default = true;
+
+                        Ok(())
+                    }
+                    _ => Err(meta.error("invalid #[new(...)] content")),
                 }) {
                     return err.into_compile_error().into();
                 }
@@ -72,22 +78,27 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
             let field_ident = field.ident.expect("Field should be named.");
             let field_ty = field.ty;
             let (mut param_ty, mut field_assign) = if use_into {
-                (quote!(impl Into<#field_ty>), quote!(#field_ident.into()))
+                (
+                    Some(quote!(impl Into<#field_ty>)),
+                    quote!(#field_ident.into()),
+                )
+            } else if use_default {
+                (None, quote!(Default::default()))
             } else {
-                (quote!(#field_ty), quote!(#field_ident))
+                (Some(quote!(#field_ty)), quote!(#field_ident))
             };
 
             match field_ty {
                 Type::Path(ty) => {
                     let sgmt = if ty.path.segments.len() != 1 {
-                        return error(ty.span(), "Expected a single-segmented type path.");
+                        return error(ty.span(), "expected a single-segmented type path");
                     } else {
                         &ty.path.segments[0]
                     };
 
                     // If the type is boxed, use the inner type as the parameter type
                     // and box the parameter when assigning the field.
-                    if sgmt.ident == "Box" {
+                    if !use_default && sgmt.ident == "Box" {
                         if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
                             args,
                             ..
@@ -96,40 +107,42 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
                             if args.len() != 1 {
                                 return error(
                                     ty.span(),
-                                    "`Box<..>` should have a single generic argument.",
+                                    "Box<..> should have a single generic argument",
                                 );
                             }
 
                             let inner_ty = if let GenericArgument::Type(ty) = &args[0] {
                                 ty
                             } else {
-                                return error(ty.span(), "Expected a generic type.");
+                                return error(ty.span(), "expected a generic type");
                             };
-                            param_ty = if use_into {
+                            param_ty = Some(if use_into {
                                 quote!(impl Into<#inner_ty>)
                             } else {
                                 quote!(#inner_ty)
-                            };
+                            });
 
                             field_assign = quote!(Box::new(#field_assign));
                         } else {
-                            return error(sgmt.span(), "Invalid `Box<..>` type.");
+                            return error(sgmt.span(), "invalid Box<..> type");
                         }
                     }
                 }
                 Type::Tuple(_) => {
                     if use_into {
-                        return error(field_ty.span(), "Can't use `#[new(..)]` with tuple types.");
+                        return error(field_ty.span(), "can't use #[new(...)] with tuple types");
                     }
                 }
-                _ => return error(field_ty.span(), "Unexpected field type."),
+                _ => return error(field_ty.span(), "unexpected field type"),
             }
 
-            param_list.push(quote!(#field_ident: #param_ty));
             assigns.push(quote!(#field_ident: #field_assign));
+            if let Some(param_ty) = param_ty {
+                param_list.push(quote!(#field_ident: #param_ty));
+            }
         }
 
-        // Write the `new()` implementation.
+        // Write the new() implementation.
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
         let new_impl = quote! {
             impl #impl_generics #ident #ty_generics #where_clause {
@@ -143,7 +156,7 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
     } else {
         error(
             fields.span(),
-            "Only structs with named fields are supported.",
+            "only structs with named fields are supported.",
         )
     }
 }
@@ -180,15 +193,15 @@ pub fn from_structs(_args: TokenStream, input: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     if variants.is_empty() {
-        return error(input.span(), "Unexpected empty enum.");
+        return error(input.span(), "unexpected empty enum");
     }
 
-    // For each enum variant with an inner struct, generate the `From<..>` implementation.
+    // For each enum variant with an inner struct, generate the From<..> implementation.
     let mut from_impls = Vec::with_capacity(variants.len());
     for variant in variants {
         if let Fields::Unnamed(FieldsUnnamed { unnamed, .. }) = &variant.fields {
             if unnamed.len() != 1 {
-                return error(unnamed.span(), "Expected a single struct identifier.");
+                return error(unnamed.span(), "expected a single struct identifier");
             }
 
             let struct_ty = &unnamed[0].ty;

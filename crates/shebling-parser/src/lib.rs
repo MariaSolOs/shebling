@@ -11,10 +11,12 @@ use std::cell::RefCell;
 
 use diagnostic::{ParseDiagnostic, ParseDiagnosticBuilder};
 use location::Span;
+use shebling_codegen::New;
 
 // region: Parsing context.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, New)]
 struct ParseContext {
+    #[new(default)]
     diags: RefCell<Vec<ParseDiagnostic>>,
 }
 
@@ -25,6 +27,10 @@ impl ParseContext {
 
     fn take_diags(&self) -> Vec<ParseDiagnostic> {
         self.diags.take()
+    }
+
+    fn extend_diags(&self, other: Self) {
+        self.diags.borrow_mut().extend(other.take_diags());
     }
 }
 // endregion

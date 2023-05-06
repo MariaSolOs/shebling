@@ -6,6 +6,7 @@ fn test() {
 
     // #[derive(New)] tests
     t.pass("tests/cases/new_boxed.rs");
+    t.pass("tests/cases/new_default.rs");
     t.pass("tests/cases/new_into.rs");
     t.compile_fail("tests/cases/new_invalid_attr.rs");
     t.pass("tests/cases/new_param_ty.rs");

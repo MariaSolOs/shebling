@@ -10,7 +10,7 @@ error: unexpected end of input, expected nested attribute
 13 |     #[new()]
    |           ^
 
-error: Invalid `#[new(..)]` content.
+error: invalid #[new(...)] content
   --> tests/cases/new_invalid_attr.rs:19:11
    |
 19 |     #[new(wrong)]

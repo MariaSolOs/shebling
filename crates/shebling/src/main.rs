@@ -1,8 +1,8 @@
-use clap::{error::ErrorKind, CommandFactory, Parser};
+use clap::{CommandFactory, Parser};
 use std::{fs, path::PathBuf};
 
 // TODO: Default values?
-#[derive(Parser)]
+#[derive(clap::Parser)]
 #[command(
     author,
     version,
@@ -30,8 +30,11 @@ fn main() {
         Ok(source_code) => shebling_parser::parse(file_path, &source_code),
         Err(err) => {
             let mut cmd = Args::command();
-            cmd.error(ErrorKind::Io, format!("{} - {}", file_path, err))
-                .exit();
+            cmd.error(
+                clap::error::ErrorKind::Io,
+                format!("{} - {}", file_path, err),
+            )
+            .exit();
         }
     }
 }
