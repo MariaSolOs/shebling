@@ -121,10 +121,6 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::parser::bad_space))]
     BadSpace,
 
-    #[error("Incorrect shell syntax!")]
-    #[diagnostic(code(shebling::parser::c_like_code))]
-    CLikeCode,
-
     #[error("You should escape this character.")]
     #[diagnostic(code(shebling::parser::missing_escape))]
     MissingEscape,
@@ -133,6 +129,9 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::parser::missing_space))]
     MissingSpace,
 
+    #[error("Incorrect shell syntax!")]
+    #[diagnostic(code(shebling::parser::not_shell_code))]
+    NotShellCode,
     #[error("You're missing some curlies here.")]
     #[diagnostic(code(shebling::parser::unbraced))]
     Unbraced,

@@ -356,7 +356,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
             if let Some((ident, range)) = ident {
                 if COMMON_COMMANDS.contains(&*ident) {
                     span.extra.diag(
-                        ParseDiagnostic::builder(ParseDiagnosticKind::CLikeCode).label(
+                        ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode).label(
                             "[ is a command, not a syntax marker for the if statement!",
                             range,
                         ),
@@ -859,7 +859,7 @@ mod tests {
         assert_parse!(cond("[ grep foo file ]") => Err(
             (1, 8),
             Notes: [((1, 8), "expected the test to end")],
-            Diags: [((1, 3), (1, 7), ParseDiagnosticKind::CLikeCode)]
+            Diags: [((1, 3), (1, 7), ParseDiagnosticKind::NotShellCode)]
         ));
 
         // Incorrect opening bracket.
