@@ -43,11 +43,13 @@ macro_rules! assert_parse {
         ::pretty_assertions::assert_str_eq!(*span.fragment(), $unparsed);
 
         // Verify the diagnostics.
+        let mut diags = span.extra.take_diags().into_iter();
         $($(
-            for diag in span.extra.take_diags() {
-                assert_diag_eq!(&diag, (($line1, $col1), $(($line2, $col2),)? $kind));
-            }
+            let diag = diags.next().expect("Expected a parser diagnostic.");
+            assert_diag_eq!(&diag, (($line1, $col1), $(($line2, $col2),)? $kind));
         )+)?
+        let last_diag = diags.next();
+        assert!(last_diag.is_none(), "There's a diag left: {:#?}", last_diag);
     };
 
     ($parser:ident($source:literal) => Err($line:literal, $col:literal)) => {
@@ -103,11 +105,13 @@ macro_rules! assert_parse {
         assert!(last_note.is_none(), "There's a note left: {:#?}", last_note);
 
         // Check the diagnostics.
+        let mut diags = err.diags().into_iter();
         $(
-            for diag in err.diags() {
-                assert_diag_eq!(diag, (($line2, $col2), $(($line3, $col3),)? $kind));
-            }
+            let diag = diags.next().expect("Expected a parser diagnostic.");
+            assert_diag_eq!(diag, (($line2, $col2), $(($line3, $col3),)? $kind));
         )*
+        let last_diag = diags.next();
+        assert!(last_diag.is_none(), "There's a diag left: {:#?}", last_diag);
     };
 }
 
