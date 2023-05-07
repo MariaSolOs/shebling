@@ -282,6 +282,15 @@ mod tests {
     }
 
     #[test]
+    fn test_backslash() {
+        // An actual backslash.
+        assert_parse!(backslash("\\") => "", '\\');
+
+        // A forward slash != backslash.
+        assert_parse!(backslash("/") => Err(1, 1));
+    }
+
+    #[test]
     fn test_double_quoted() {
         // TODO
     }
