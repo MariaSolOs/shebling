@@ -1316,7 +1316,7 @@ mod tests {
                 ),
                 ControlOp::And,
             ).into(),
-            [((1, 4), (1, 5), ParseDiagnosticKind::UnexpectedToken)]
+            [((1, 4), (1, 5), ParseDiagnosticKind::MissingSpace)]
         );
     }
 }
