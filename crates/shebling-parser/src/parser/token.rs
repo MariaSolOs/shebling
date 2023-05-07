@@ -21,7 +21,7 @@ fn parse_token<'a, T: Token>(token: T) -> impl FnMut(Span<'a>) -> ParseResult<T>
 impl ParseToken for BinOp {}
 
 impl ParseToken for ControlOp {
-    fn parse_token<'a>(self, mut span: Span<'a>) -> ParseResult<'a, Self> {
+    fn parse_token(self, mut span: Span) -> ParseResult<Self> {
         // Special case for ';' since we don't want to mix it up with ';;'.
         if let ControlOp::Semi = self {
             (span, _) = not(token(ControlOp::DSemi))(span)?;
@@ -32,7 +32,7 @@ impl ParseToken for ControlOp {
 }
 
 impl ParseToken for Keyword {
-    fn parse_token<'a>(self, span: Span<'a>) -> ParseResult<'a, Self> {
+    fn parse_token(self, span: Span) -> ParseResult<Self> {
         let keyword = self.token();
 
         let (span, word) = recognize_string(tag_no_case(keyword))(span)?;

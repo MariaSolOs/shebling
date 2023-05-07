@@ -241,7 +241,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
                         if op == BinOp::Match {
                             map(many1(regex_sgmts), |sgmts| {
                                 let sgmts = sgmts.into_iter().flatten().collect::<Vec<_>>();
-                                Word::new(sgmts).into()
+                                Word::new(sgmts)
                             })(span)
                         } else {
                             cond_word(span)
