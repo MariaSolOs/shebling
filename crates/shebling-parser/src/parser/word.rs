@@ -238,7 +238,7 @@ pub(super) fn word(span: Span) -> ParseResult<Word> {
         .any(|keyword| keyword.token() == lit)
         {
             span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                     .label(format!("literal {}", lit), range)
                     .help("If intended, quote it. Else add a semicolon or new line before it."),
             );
@@ -259,7 +259,7 @@ fn word_sgmt_before_pattern<'a>(
         // Curly that's not a keyword.
         let (span, (curly, range)) = ranged(one_of("{}"))(span)?;
         span.extra.diag(
-            ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+            ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                 .label("literal curly", range)
                 .help("If intended, quote it. Else add a semicolon or new line before it."),
         );

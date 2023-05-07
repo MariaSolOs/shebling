@@ -130,7 +130,7 @@ fn escaping_backquoted(escape_double_quotes: bool) -> impl Fn(Span) -> ParseResu
         alt((tag("`"), |span| {
             let (span, (tick, range)) = ranged(tag("´"))(span)?;
             span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                     .label("forward tick", range)
                     .help("For command expansion, use backticks (``)."),
             );
@@ -261,8 +261,8 @@ mod tests {
             backquoted("´foo´") => "",
             BackQuoted::new(tests::lit_pipeline("foo")),
             [
-                ((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedToken),
-                ((1, 5), (1, 6), ParseDiagnosticKind::UnexpectedToken)
+                ((1, 1), (1, 2), ParseDiagnosticKind::SusToken),
+                ((1, 5), (1, 6), ParseDiagnosticKind::SusToken)
             ]
         );
 

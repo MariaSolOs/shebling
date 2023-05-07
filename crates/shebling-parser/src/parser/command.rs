@@ -268,7 +268,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
                     ("[[ .. ]]", "( .. )")
                 };
                 span.extra.diag(
-                    ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                    ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                         .range(range)
                         .help(format!(
                             "If grouping expressions inside {}, use {}.",
@@ -544,7 +544,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
         // Tests should do math stuff inside $((..)).
         if let Some((start, end)) = math_following {
             span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                     .label("math operator!", Range::new(start, end))
                     .help("Inside conditions, do math stuff inside $(( .. ))."),
             )
@@ -639,7 +639,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
         || (!single_bracketed && second_bracket.is_none())
     {
         span.extra.diag(
-            ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken).label(
+            ParseDiagnostic::builder(ParseDiagnosticKind::SusToken).label(
                 "closing bracket doesn't match the opening one",
                 bracket_range,
             ),
@@ -675,7 +675,7 @@ fn cond_cmd(span: Span) -> ParseResult<CondCmd> {
     if let Some((_, range)) = next_word {
         if sus_token.is_none() && cond_op.is_none() {
             span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                     .label("unexpected parameter after condition", range)
                     .help("You might be missing a && or ||."),
             )
@@ -920,7 +920,7 @@ pub(super) fn term(span: Span) -> ParseResult<Term> {
         )))(span)?;
         if let Some(entity_end) = entity_end {
             span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                     .label("unquoted HTML entity", Range::new(&start, entity_end))
                     .help("Replace it with the corresponding character."),
             );
@@ -943,7 +943,7 @@ pub(super) fn term(span: Span) -> ParseResult<Term> {
             preceded(trivia, opt(preceded(token(ControlOp::Semi), position)))(span)?;
         if let Some(semi_end) = semi_end {
             span.extra.diag(
-                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                     .label(
                         "both & and ; terminate the command",
                         Range::new(start, semi_end),
@@ -1032,7 +1032,7 @@ mod tests {
         assert_parse!(
             cond("[ ]]") => "",
             Cond::empty(true),
-            [((1, 3), (1, 5), ParseDiagnosticKind::UnexpectedToken)]
+            [((1, 3), (1, 5), ParseDiagnosticKind::SusToken)]
         );
 
         // if [ grep foo file ] pitfall.
@@ -1062,19 +1062,19 @@ mod tests {
         assert_parse!(cond("[ [ foo ] ]") => Err(
             (1, 5),
             Notes: [((1, 5), "expected the test to end")],
-            Diags: [((1, 3), (1, 4), ParseDiagnosticKind::UnexpectedToken)]
+            Diags: [((1, 3), (1, 4), ParseDiagnosticKind::SusToken)]
         ));
 
         // Shouldn't use math operators inside test conditions.
         assert_parse!(cond("[ x + 1 ]") => Err(
             (1, 5),
             Notes: [((1, 5), "expected the test to end")],
-            Diags: [((1, 5), (1, 6), ParseDiagnosticKind::UnexpectedToken)]
+            Diags: [((1, 5), (1, 6), ParseDiagnosticKind::SusToken)]
         ));
         assert_parse!(cond("[ x - 1 ]") => Err(
             (1, 6),
             Notes: [((1, 6), "expected a test operator")],
-            Diags: [((1, 5), (1, 6), ParseDiagnosticKind::UnexpectedToken)]
+            Diags: [((1, 5), (1, 6), ParseDiagnosticKind::SusToken)]
         ));
 
         // Missing spaces around the operator.
@@ -1125,7 +1125,7 @@ mod tests {
                 Cond::with_expr(true, tests::lit_word("foo")),
                 vec![],
             ),
-            [((1, 9), (1, 10), ParseDiagnosticKind::UnexpectedToken)]
+            [((1, 9), (1, 10), ParseDiagnosticKind::SusToken)]
         );
     }
 
@@ -1291,7 +1291,7 @@ mod tests {
                 tests::lit_pipeline("amp"),
                 ControlOp::And
             ).into(),
-            [((1, 5), (1, 10), ParseDiagnosticKind::UnexpectedToken)]
+            [((1, 5), (1, 10), ParseDiagnosticKind::SusToken)]
         );
 
         // Check if something looks like URL query parameters.

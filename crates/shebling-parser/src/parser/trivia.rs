@@ -5,7 +5,7 @@ pub(super) const UNISPACES: &str = "\u{A0}\u{200B}";
 fn carriage_return(span: Span) -> ParseResult<char> {
     let (span, (cr, range)) = ranged(char('\r'))(span)?;
     span.extra.diag(
-        ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+        ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
             .label("carriage return", range)
             .help("Try running the script through tr -d '\\r'."),
     );
@@ -64,7 +64,7 @@ pub(super) fn newline_list(span: Span) -> ParseResult<()> {
     )))))(span)?;
     if let Some((op, range)) = op {
         span.extra.diag(
-            ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+            ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                 .label("control operator", range)
                 .help(format!(
                     "Move the {} to the end of the previous line.",
@@ -136,7 +136,7 @@ mod tests {
         assert_parse!(
             carriage_return("\r") => "",
             '\r',
-            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedToken)]
+            [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
         );
 
         // Not a CR.
@@ -165,13 +165,13 @@ mod tests {
         assert_parse!(
             line_ending("\r\n") => "",
             '\n',
-            [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedToken)]
+            [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
         );
 
         // Missing the new line.
         assert_parse!(line_ending("\r") => Err(
             (1, 2),
-            Diags: [((1, 1), (1, 2), ParseDiagnosticKind::UnexpectedToken)]
+            Diags: [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
         ));
 
         // Not a new line at all.
@@ -215,12 +215,12 @@ mod tests {
         assert_parse!(
             newline_list("\n|") => "|",
             (),
-            [((2, 1), (2, 2), ParseDiagnosticKind::UnexpectedToken)]
+            [((2, 1), (2, 2), ParseDiagnosticKind::SusToken)]
         );
         assert_parse!(
             newline_list("\n  &&") => "&&",
             (),
-            [((2, 3), (2, 5), ParseDiagnosticKind::UnexpectedToken)]
+            [((2, 3), (2, 5), ParseDiagnosticKind::SusToken)]
         );
     }
 

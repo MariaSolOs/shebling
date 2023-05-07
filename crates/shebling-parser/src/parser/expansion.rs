@@ -639,7 +639,7 @@ mod tests {
         assert_parse!(dollar_cmd_expansion("${ foo }") => Err(
             (1, 9),
             Notes: [((1, 9), "expected a closing }")],
-            Diags: [((1, 8), (1, 9), ParseDiagnosticKind::UnexpectedToken)]
+            Diags: [((1, 8), (1, 9), ParseDiagnosticKind::SusToken)]
         ));
 
         // There needs to be space after the {.

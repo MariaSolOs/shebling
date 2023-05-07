@@ -133,6 +133,10 @@ pub(crate) enum ParseDiagnosticKind {
     #[diagnostic(code(shebling::parser::not_shell_code))]
     NotShellCode,
 
+    #[error("This code looks a bit suspicious.")]
+    #[diagnostic(code(shebling::parser::sus_token))]
+    SusToken,
+
     #[error("This assignment's value looks kinda sus.")]
     #[diagnostic(code(shebling::parser::sus_value))]
     SusValue,
@@ -144,10 +148,6 @@ pub(crate) enum ParseDiagnosticKind {
     #[error("Unclosed string!")]
     #[diagnostic(code(shebling::parser::unclosed_string))]
     UnclosedString,
-
-    #[error("Unexpected token!")]
-    #[diagnostic(code(shebling::parser::unexpected_token))]
-    UnexpectedToken,
 
     #[error("Unicode character!")]
     #[diagnostic(code(shebling::parser::unichar), help("Delete and retype it."))]
