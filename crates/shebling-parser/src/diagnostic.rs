@@ -22,7 +22,7 @@ impl miette::Diagnostic for ParseDiagnostic {
     }
 
     fn severity(&self) -> Option<miette::Severity> {
-        self.kind.severity().or(Some(miette::Severity::Warning))
+        Some(miette::Severity::Warning)
     }
 
     fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {

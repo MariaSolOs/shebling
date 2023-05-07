@@ -6,7 +6,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error, miette::Diagnostic)]
 #[error("Parser bailed!")]
-#[diagnostic(code("shebling::parser::fatal"))]
+#[diagnostic(code(shebling::parser::fatal), severity("error"))]
 pub(crate) struct ParseError {
     #[label("stopped here")]
     location: Location,
@@ -35,6 +35,7 @@ impl ParseError {
 
 #[derive(Clone, Debug, miette::Diagnostic, Error)]
 #[error("{note}")]
+#[diagnostic(severity("error"))]
 pub(crate) struct ParseErrorNote {
     #[label]
     location: Location,
