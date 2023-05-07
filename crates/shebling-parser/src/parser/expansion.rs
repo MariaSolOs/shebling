@@ -247,7 +247,7 @@ fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                         into(double_quoted),
                         unquoted_dollar_sgmt,
                         into(brace_expansion),
-                        into(backquoted(false)),
+                        into(backquoted),
                         into(lit(char('#'))),
                         // Parse a literal until something that looks like a math operator.
                         lit_word_sgmt("+-*/=%^,]?:"),
@@ -473,7 +473,7 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
                 into(lit(recognize_string(is_a("/:+-=%")))),
                 into(extglob),
                 unquoted_dollar_sgmt,
-                into(backquoted(false)),
+                into(backquoted),
                 map(
                     // Literals, with maybe some escaped characters.
                     many1(alt((

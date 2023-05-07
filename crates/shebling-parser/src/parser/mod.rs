@@ -12,7 +12,7 @@ mod word;
 
 use nom::{
     branch::alt,
-    bytes::complete::{is_a, is_not, tag, tag_no_case},
+    bytes::complete::{is_a, is_not, tag, tag_no_case, take_till},
     character::complete::{alpha1, alphanumeric1, anychar, char, digit1, newline, one_of, satisfy},
     combinator::{
         all_consuming, consumed, cut, eof, fail, into, map, not, opt, peek, recognize, value,
