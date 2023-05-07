@@ -2,6 +2,107 @@ use super::*;
 use expansion::EXTGLOB_PREFIX;
 use quoted::{DOUBLE_ESCAPABLE, DOUBLE_UNIQUOTES, SINGLE_UNIQUOTES};
 
+fn array(span: Span) -> ParseResult<Array> {
+    // Read the opening brace, warning if it looks like a multi-D array.
+    let (span, (first_paren, second_paren)) = terminated(
+        pair(
+            terminated(position, char('(')),
+            opt(peek(preceded(char('('), position))),
+        ),
+        multi_trivia,
+    )(span)?;
+    if let Some(second_paren) = second_paren {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::SusValue)
+            .range(Range::new(first_paren, second_paren))
+            .help("Doing math? Then you're missing the dollar in $((..)), or use '( (' for nested arrays."),
+        );
+    }
+
+    // Parse the elements, which may be key-value pairs, arrays, or
+    // regular words.
+    let (span, elems) = many0(delimited(
+        not(char(')')),
+        alt((
+            map(
+                separated_pair(
+                    many1(subscript),
+                    char('='),
+                    alt((into(array), into(word), |span| Ok((span, Value::Empty)))),
+                ),
+                |(key, value)| KeyValue::new(key, value).into(),
+            ),
+            into(array),
+            into(word),
+        )),
+        multi_trivia,
+    ))(span)?;
+
+    // Read the closing brace.
+    let (span, _) = context("expected a closing ) for this array!", char(')'))(span)?;
+
+    Ok((span, Array::new(elems)))
+}
+
+pub(super) fn assign(span: Span) -> ParseResult<Assign> {
+    // Parse the variable name and any array indices.
+    let (span, (ident, subscripts)) = preceded(
+        context(
+            "don't use $ on the left side of assignments!",
+            not(char('$')),
+        ),
+        pair(context("invalid identifier!", identifier), many0(subscript)),
+    )(span)?;
+
+    // Parse the assignment operator.
+    let (span, op) = context(
+        "expected an assignment operator!",
+        alt((token(BinOp::AddEq), token(BinOp::Eq))),
+    )(span)?;
+
+    // Check for ==.
+    let (span, trailing) = opt(peek(ranged(token(BinOp::Eq))))(span)?;
+
+    // Read any spaces after the operator.
+    let (span, ((right_space, space_range), end_of_cmd)) = pair(
+        ranged(map(trivia, |trivia| !trivia.is_empty())),
+        followed_by(alt((is_a("\r\n;&|)"), eof))),
+    )(span)?;
+
+    let (span, value) = if right_space || end_of_cmd {
+        // If there's a space after the operator, the value will be an empty string.
+        // We don't warn for IFS because of the common 'IFS= read ...' idiom.
+        if ident != "IFS" && right_space && !end_of_cmd {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusValue)
+                    .label("space causes the value to be empty", space_range)
+                    .help(
+                        "If you do want a value, remove the space. Else use '' for an empty value.",
+                    ),
+            );
+        }
+
+        (span, Value::Empty)
+    } else {
+        // Warn about == because the 2nd = will be part of the value.
+        if let Some((_, range)) = trailing {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusValue)
+                    .label("this = is part of the value", range)
+                    .help("Use a single = for assignments, or [ .. ] / [[ .. ]] for comparisons."),
+            );
+        }
+
+        // Read the assignment value.
+        terminated(alt((into(array), into(word))), trivia)(span)?
+    };
+
+    Ok((
+        span,
+        Assign::new(Variable::with_subscripts(ident, subscripts), value, op),
+    ))
+}
+
 pub(super) fn identifier(span: Span) -> ParseResult<String> {
     recognize_string(pair(
         // Make sure that the first character is not a number.
@@ -96,6 +197,27 @@ pub(super) fn lit_word_sgmt<'a>(
     into(lit(lit_string(end_pattern)))
 }
 
+fn subscript(span: Span) -> ParseResult<Subscript> {
+    delimited(
+        char('['),
+        map(
+            recognize_string(context(
+                "empty subscript!",
+                many1(alt((
+                    word_sgmt_before_pattern("]"),
+                    into(lit(trivia1)),
+                    into(lit(recognize_string(is_a(&*format!(
+                        "|&;<>() '\t\n\r\u{A0}{}",
+                        DOUBLE_ESCAPABLE
+                    ))))),
+                ))),
+            )),
+            Subscript::new,
+        ),
+        char(']'),
+    )(span)
+}
+
 pub(super) fn word(span: Span) -> ParseResult<Word> {
     let (span, (word, range)) = ranged(map(
         context("expected a non-empty word!", many1(word_sgmt)),
@@ -178,6 +300,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_array() {
+        // TODO
+    }
+
+    #[test]
+    fn test_assign() {
+        // TODO
+    }
+
+    #[test]
     fn test_identifier() {
         // Valid identifiers.
         assert_parse!(identifier("foo") => "", "foo");
@@ -216,6 +348,15 @@ mod tests {
         assert_parse!(lit("") => Err(1, 1));
         // If not escaped, it cannot be a special character.
         assert_parse!(lit("$") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_subscript() {
+        // There has to be something inside the brackets, even if it's
+        // just space.
+        assert_parse!(subscript("[0]") => "", Subscript::new("0"));
+        assert_parse!(subscript("[ ]") => "", Subscript::new(" "));
+        assert_parse!(subscript("[]") => Err((1, 2), Notes: [((1, 2), "empty subscript")]));
     }
 
     #[test]

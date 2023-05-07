@@ -132,6 +132,11 @@ pub(crate) enum ParseDiagnosticKind {
     #[error("Incorrect shell syntax!")]
     #[diagnostic(code(shebling::parser::not_shell_code))]
     NotShellCode,
+
+    #[error("This assignment's value looks kinda sus.")]
+    #[diagnostic(code(shebling::parser::sus_value))]
+    SusValue,
+
     #[error("You're missing some curlies here.")]
     #[diagnostic(code(shebling::parser::unbraced))]
     Unbraced,

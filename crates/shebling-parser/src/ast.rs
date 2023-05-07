@@ -224,6 +224,12 @@ pub(crate) struct Glob {
     #[new(into)]
     pattern: String,
 }
+
+impl<S: AsRef<str> + ?Sized> PartialEq<S> for Glob {
+    fn eq(&self, other: &S) -> bool {
+        self.pattern == other.as_ref()
+    }
+}
 // endregion
 
 // region: Quoted strings.
@@ -360,6 +366,35 @@ pub(crate) struct Subscript {
     #[new(into)]
     content: String,
 }
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Assign {
+    variable: Variable,
+    #[new(into)]
+    value: Value,
+    op: BinOp,
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum Value {
+    Array(Array),
+    Empty,
+    KeyValue(KeyValue),
+    Word(Word),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Array {
+    elems: Vec<Value>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct KeyValue {
+    key: Vec<Subscript>,
+    #[new(into)]
+    value: Box<Value>,
+}
 // endregion
 
 // region: Conditional expressions.
@@ -479,13 +514,37 @@ pub(crate) enum Cmd {
     // TODO Compound(CompoundCmd),
     Cond(CondCmd),
     // TODO Coproc(Coproc),
-    // TODO Simple(SimpleCmd),
+    Simple(SimpleCmd),
 }
 
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CondCmd {
     cond: Cond,
     redirs: Vec<Redir>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct SimpleCmd {
+    cmd: Option<Word>,
+    prefix: Vec<CmdPrefixSgmt>,
+    suffix: Vec<CmdSuffixSgmt>,
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum CmdPrefixSgmt {
+    Assign(Assign),
+    Redir(Redir),
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum CmdSuffixSgmt {
+    ArithSeq(ArithSeq),
+    Assign(Assign),
+    Pipeline(Pipeline),
+    Redir(Redir),
+    Word(Word),
 }
 // endregion
 

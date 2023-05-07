@@ -7,7 +7,7 @@ pub(crate) const EXTGLOB_PREFIX: &str = "?*@!+";
 /// Note that `$0` is not included here, we handle numerical variables separately.
 const SPECIAL_PARAMS: &str = "$?!#-@*";
 
-fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
+pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     macro_rules! bin_op {
         ($op:path) => {
             ::nom::sequence::terminated(
@@ -628,9 +628,11 @@ mod tests {
 
     #[test]
     fn test_dollar_cmd_expansion() {
-        // TODO: Uncomment when adding pipelines.
         // The content can be any valid term.
-        // assert_eq!(parse("${ foo; }") => "", DollarCmdExpansion::new(lit_pipeline("foo")));
+        assert_parse!(
+            dollar_cmd_expansion("${ foo; }") => "",
+            DollarCmdExpansion::new(tests::lit_pipeline("foo"))
+        );
 
         // The term needs to end with a semicolon, else the closing curly will be
         // parsed as a literal.
@@ -646,25 +648,27 @@ mod tests {
 
     #[test]
     fn test_dollar_cmd_sub() {
-        // TODO: Uncomment when adding pipelines.
-        // // The content can be any valid term.
-        // assert_eq!(parse("$( foo )") => "", DollarCmdSub::new(Some(lit_pipeline("foo").into())));
-        // assert_eq!(
-        //     parse("$(foo; ls 'bar')") => "",
-        //     DollarCmdSub::new(Some(
-        //         List::new(
-        //             lit_pipeline("foo"),
-        //             Pipeline::new(vec![
-        //                 SimpleCmd::new(
-        //                     Some(lit_word("ls")),
-        //                     vec![],
-        //                     vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()],
-        //                 ).into()
-        //             ]),
-        //             ControlOp::Semi
-        //         ).into()
-        //     ))
-        // );
+        // The content can be any valid term.
+        assert_parse!(
+            dollar_cmd_sub("$( foo )") => "",
+            DollarCmdSub::new(Some(tests::lit_pipeline("foo").into()))
+        );
+        assert_parse!(
+            dollar_cmd_sub("$(foo; ls 'bar')") => "",
+            DollarCmdSub::new(Some(
+                List::new(
+                    tests::lit_pipeline("foo"),
+                    Pipeline::new(vec![
+                        SimpleCmd::new(
+                            Some(tests::lit_word("ls")),
+                            vec![],
+                            vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()],
+                        ).into()
+                    ]),
+                    ControlOp::Semi
+                ).into()
+            ))
+        );
 
         // The content can be just trivia.
         assert_parse!(dollar_cmd_sub("$( )") => "", DollarCmdSub::new(None));

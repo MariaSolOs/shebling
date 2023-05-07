@@ -17,6 +17,10 @@ fn comment(span: Span) -> ParseResult<String> {
     recognize_string(pair(char('#'), is_not("\r\n")))(span)
 }
 
+pub(super) fn linebreak(span: Span) -> ParseResult<()> {
+    swallow(opt(newline_list))(span)
+}
+
 pub(super) fn line_ending(span: Span) -> ParseResult<char> {
     // TODO: readPendingHereDocs
     preceded(opt(carriage_return), newline)(span)
@@ -44,6 +48,32 @@ pub(super) fn multi_trivia1(span: Span) -> ParseResult<String> {
         "expected whitespace!",
         verify(multi_trivia, |trivia: &String| !trivia.is_empty()),
     )(span)
+}
+
+pub(super) fn newline_list(span: Span) -> ParseResult<()> {
+    // Parse all the line separators.
+    let (span, _) = many1(terminated(alt((line_ending, carriage_return)), trivia))(span)?;
+
+    // If we peek a control operator, the last line was probably broken incorrectly.
+    let (span, op) = opt(peek(ranged(alt((
+        token(ControlOp::AndIf),
+        token(ControlOp::And),
+        token(ControlOp::OrAnd),
+        token(ControlOp::OrIf),
+        token(ControlOp::Or),
+    )))))(span)?;
+    if let Some((op, range)) = op {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                .label("control operator", range)
+                .help(format!(
+                    "Move the {} to the end of the previous line.",
+                    op.token()
+                )),
+        );
+    }
+
+    Ok((span, ()))
 }
 
 pub(super) fn trivia(span: Span) -> ParseResult<String> {
@@ -174,6 +204,24 @@ mod tests {
 
         // Stop when we should.
         assert_parse!(multi_trivia(" foo") => "foo", " ");
+    }
+
+    #[test]
+    fn test_newline_list() {
+        // A bunch of whitespace.
+        assert_parse!(newline_list("\n  \n\t") => "", ());
+
+        // Wrong operator placement.
+        assert_parse!(
+            newline_list("\n|") => "|",
+            (),
+            [((2, 1), (2, 2), ParseDiagnosticKind::UnexpectedToken)]
+        );
+        assert_parse!(
+            newline_list("\n  &&") => "&&",
+            (),
+            [((2, 3), (2, 5), ParseDiagnosticKind::UnexpectedToken)]
+        );
     }
 
     #[test]

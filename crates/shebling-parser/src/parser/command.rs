@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashSet;
 
 use super::*;
-use crate::location::Location;
+use crate::{location::Location, ParseContext};
 use expansion::EXTGLOB_PREFIX;
 use quoted::DOUBLE_ESCAPABLE;
 
@@ -193,7 +193,7 @@ fn cmd(span: Span) -> ParseResult<Cmd> {
         // TODO into(compound_cmd),
         into(cond_cmd),
         // TODO into(coproc),
-        // TODO into(simple_cmd),
+        into(simple_cmd),
     ))(span)
 }
 
@@ -702,103 +702,283 @@ fn peek_sus_token(span: Span) -> ParseResult<()> {
     ))(span)
 }
 
-pub(super) fn term(_span: Span) -> ParseResult<Term> {
-    // fn and_or(span: Span) -> ParseResult<Term> {
-    //     // Left-fold the pipelines into a list.
-    //     preceded(
-    //         multi_trivia,
-    //         map(
-    //             pair(
-    //                 map(pipeline, Term::Pipeline),
-    //                 many0(separated_pair(
-    //                     alt((token(ControlOp::AndIf), token(ControlOp::OrIf))),
-    //                     linebreak,
-    //                     pipeline,
-    //                 )),
-    //             ),
-    //             |(head, tail)| {
-    //                 tail.into_iter().fold(head, |acc, (op, pipeline)| {
-    //                     List::new(acc, pipeline, op).into()
-    //                 })
-    //             },
-    //         ),
-    //     )(span)
-    // }
+fn pipeline(span: Span) -> ParseResult<Pipeline> {
+    // Ensure there's not a misplaced token.
+    let (span, _) = context("unexpected token", not(peek_sus_token))(span)?;
 
-    // fn and_sep(span: Span) -> ParseResult<ControlOp> {
-    //     let (span, (sep_start, and)) = pair(nom_locate::position, token(ControlOp::And))(span)?;
+    // Parse a bang if there's one.
+    let (span, _) = opt(|span| {
+        let (span, trivia) = preceded(char('!'), trivia)(span)?;
+        if trivia.is_empty() {
+            span.extra
+                .diag(ParseDiagnostic::builder(ParseDiagnosticKind::MissingSpace).range(&span));
+        }
 
-    //     // Warn if the `&` seems to begin an HTML entity.
-    //     let (mut span, entity_end) = opt(peek(preceded(
-    //         pair(
-    //             alt((
-    //                 preceded(char('#'), digit1),
-    //                 preceded(tag("#x"), alphanumeric1),
-    //                 alpha1,
-    //             )),
-    //             char(';'),
-    //         ),
-    //         nom_locate::position,
-    //     )))(span)?;
-    //     if let Some(entity_end) = entity_end {
-    //         span.extra
-    //             .report(Lint::new(Range::new(&sep_start, entity_end), HTML_ENTITY));
-    //     } else {
-    //         // Warn if the `&` might be ending a command by mistake (e.g. it is in a URL).
-    //         let alpha_char;
-    //         (span, alpha_char) =
-    //             followed_by(satisfy(|c| c == '_' || c.is_ascii_alphabetic()))(span)?;
-    //         if alpha_char {
-    //             span.extra
-    //                 .report(Lint::new(Range::new(&sep_start, &span), UNSPACED_AMP));
-    //         }
-    //     }
+        Ok((span, ()))
+    })(span)?;
 
-    //     // Warn about redundant `;`s.
-    //     let (span, semi_end) = preceded(
-    //         trivia,
-    //         opt(delimited(
-    //             token(ControlOp::Semi),
-    //             nom_locate::position,
-    //             not(token(ControlOp::Semi)),
-    //         )),
-    //     )(span)?;
-    //     if let Some(semi_end) = semi_end {
-    //         span.extra
-    //             .report(Lint::new(Range::new(sep_start, semi_end), AMP_SEMI));
-    //     }
+    // Parse the commands.
+    let (span, cmds) = separated_list1(
+        context(
+            "invalid pipeline operator!",
+            delimited(
+                // Make sure we match | and |& but not ||.
+                not(token(ControlOp::OrIf)),
+                alt((token(ControlOp::OrAnd), token(ControlOp::Or))),
+                pair(trivia, linebreak),
+            ),
+        ),
+        cmd,
+    )(span)?;
 
-    //     Ok((span, and))
-    // }
+    // Spacing and bye.
+    let (span, _) = trivia(span)?;
 
-    // fn sep(span: Span) -> ParseResult<ControlOp> {
-    //     alt((
-    //         terminated(
-    //             alt((
-    //                 terminated(
-    //                     and_sep,
-    //                     // Don't parse `&&` or `&>`.
-    //                     not(one_of("&>")),
-    //                 ),
-    //                 // Don't parse clause operators.
-    //                 terminated(token(ControlOp::Semi), not(one_of(";&"))),
-    //             )),
-    //             linebreak,
-    //         ),
-    //         value(ControlOp::Newline, newline_list),
-    //     ))(span)
-    // }
+    Ok((span, Pipeline::new(cmds)))
+}
 
-    // let (span, term) = map(pair(and_or, many0(pair(sep, and_or))), |(head, tail)| {
-    //     tail.into_iter()
-    //         .fold(head, |acc, (op, and_or)| List::new(acc, and_or, op).into())
-    // })(span)?;
+fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
+    fn let_seq(span: Span) -> ParseResult<CmdSuffixSgmt> {
+        // Read the input math word.
+        let (span, (mut start, seq_span)) =
+            pair(position, terminated(recognize(word), trivia))(span)?;
 
-    // // Read the optional terminator.
-    // let (span, _) = opt(sep)(span)?;
+        // Remove quotes.
+        let (mut seq_span, quote) = opt(one_of("'\""))(seq_span)?;
+        if let Some(quote) = quote {
+            (seq_span, start) = position(seq_span)?;
+            (_, seq_span) =
+                all_consuming(terminated(take_till(|c| c == quote), char(quote)))(seq_span)?;
+        }
 
-    // Ok((span, term))
-    todo!()
+        // Subparse the math expression.
+        let seq_span = unsafe {
+            Span::new_from_raw_offset(
+                start.location_offset(),
+                start.location_line(),
+                &seq_span,
+                ParseContext::new(),
+            )
+        };
+        let (seq_span, seq) = all_consuming(arith_seq)(seq_span)?;
+        span.extra.extend_diags(seq_span.extra);
+
+        Ok((span, seq.into()))
+    }
+
+    // Parse the prefix and the command.
+    let (mut span, (prefix, cmd)) = verify(
+        pair(
+            many0(alt((into(redir), into(assign)))),
+            opt(delimited(
+                // Ignore alias supression.
+                opt(pair(
+                    backslash,
+                    peek(satisfy(|c| {
+                        c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':')
+                    })),
+                )),
+                ranged(word),
+                trivia,
+            )),
+        ),
+        |(prefix, cmd)| cmd.is_some() || !prefix.is_empty(),
+    )(span)?;
+
+    let mut suffix = vec![];
+    if let Some((cmd, range)) = &cmd {
+        // Check if the command looks like a comment.
+        if let WordSgmt::Lit(lit) = &cmd.sgmts()[0] {
+            if lit.value().starts_with("//") || {
+                if let Some(WordSgmt::Glob(glob)) = &cmd.sgmts().get(1) {
+                    lit.value() == "/" && glob == "*"
+                } else {
+                    false
+                }
+            } {
+                span.extra.diag(
+                    ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
+                        .label("C-like comment", *range)
+                        .help("In shell scripts, comments begin with #."),
+                );
+            }
+        }
+
+        if let Some(cmd) = cmd.as_lit() {
+            let cmd = cmd.value();
+
+            // Not using the right keyword for an "else if" statement.
+            if matches!(&*cmd.to_ascii_lowercase(), "elsif" | "elseif") {
+                span.extra.diag(
+                    ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
+                        .range(*range)
+                        .help("Use elif to start another branch."),
+                );
+            }
+
+            // When using "builtin", the first argument is the actual shell command.
+            let cmd = if cmd == "builtin" {
+                let builtin;
+                (span, builtin) = opt(map(terminated(word, trivia), |word| {
+                    word.as_lit().map(|lit| String::from(lit.value()))
+                }))(span)?;
+                builtin.flatten().unwrap_or_default()
+            } else {
+                cmd.into()
+            };
+
+            // Get the suffix based on the command.
+            (span, suffix) = match &*cmd {
+                "declare" | "export" | "local" | "readonly" | "typeset" => {
+                    many1(alt((
+                        into(redir),
+                        into(assign),
+                        into(terminated(word, trivia)),
+                    )))(span)?
+                }
+                "eval" => many1(alt((
+                    into(redir),
+                    into(terminated(word, trivia)),
+                    cut(context(
+                        "quote or escape your parens when using eval!",
+                        preceded(char('('), fail),
+                    )),
+                )))(span)?,
+                "let" => context(
+                    "expected an expression for this let command!",
+                    many1(alt((into(redir), let_seq, into(terminated(word, trivia))))),
+                )(span)?,
+                "time" => preceded(
+                    // Read but ignore flag arguments.
+                    many0(delimited(peek(char('-')), word, trivia)),
+                    // Parse the input pipeline, if any.
+                    map(opt(pipeline), |pipeline| {
+                        pipeline.map_or(vec![], |pipeline| vec![pipeline.into()])
+                    }),
+                )(span)?,
+                _ => many0(alt((into(redir), into(terminated(word, trivia)))))(span)?,
+            }
+        }
+    }
+
+    // TODO: readSource
+    // TODO: syntaxCheckTrap
+
+    // Drop the range.
+    let cmd = cmd.map(|(cmd, _)| cmd);
+
+    // Ignore flag arguments.
+    suffix.retain(|sgmt| {
+        if let CmdSuffixSgmt::Word(word) = sgmt {
+            word.as_lit()
+                .map_or(true, |lit| !lit.value().starts_with('-'))
+        } else {
+            true
+        }
+    });
+
+    Ok((span, SimpleCmd::new(cmd, prefix, suffix)))
+}
+
+pub(super) fn term(span: Span) -> ParseResult<Term> {
+    fn and_or(span: Span) -> ParseResult<Term> {
+        // Left-fold the pipelines into a list.
+        preceded(
+            multi_trivia,
+            map(
+                pair(
+                    map(pipeline, Term::Pipeline),
+                    many0(separated_pair(
+                        alt((token(ControlOp::AndIf), token(ControlOp::OrIf))),
+                        pair(trivia, linebreak),
+                        pipeline,
+                    )),
+                ),
+                |(head, tail)| {
+                    tail.into_iter().fold(head, |acc, (op, pipeline)| {
+                        List::new(acc, pipeline, op).into()
+                    })
+                },
+            ),
+        )(span)
+    }
+
+    fn and_sep(span: Span) -> ParseResult<ControlOp> {
+        let (span, (start, and)) = pair(position, token(ControlOp::And))(span)?;
+
+        // Warn if the & seems to begin an HTML entity.
+        let (mut span, entity_end) = opt(peek(preceded(
+            pair(
+                alt((
+                    preceded(char('#'), digit1),
+                    preceded(tag("#x"), alphanumeric1),
+                    alpha1,
+                )),
+                char(';'),
+            ),
+            position,
+        )))(span)?;
+        if let Some(entity_end) = entity_end {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                    .label("unquoted HTML entity", Range::new(&start, entity_end))
+                    .help("Replace it with the corresponding character."),
+            );
+        } else {
+            // Warn if the & might be ending a command by mistake (e.g. it is in a URL).
+            let alpha_char;
+            (span, alpha_char) =
+                followed_by(satisfy(|c| c == '_' || c.is_ascii_alphabetic()))(span)?;
+            if alpha_char {
+                span.extra.diag(
+                    ParseDiagnostic::builder(ParseDiagnosticKind::MissingSpace)
+                        .label("this & terminates the command", Range::new(&start, &span))
+                        .help("Quote or escape the & if you want a literal ampersand, or add a space after it."),
+                );
+            }
+        }
+
+        // Warn about redundant semicolons.
+        let (span, semi_end) =
+            preceded(trivia, opt(preceded(token(ControlOp::Semi), position)))(span)?;
+        if let Some(semi_end) = semi_end {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::UnexpectedToken)
+                    .label(
+                        "both & and ; terminate the command",
+                        Range::new(start, semi_end),
+                    )
+                    .help("Just use one of them."),
+            );
+        }
+
+        Ok((span, and))
+    }
+
+    fn sep(span: Span) -> ParseResult<ControlOp> {
+        alt((
+            terminated(
+                alt((
+                    // &, but not && or &>.
+                    terminated(and_sep, not(one_of("&>"))),
+                    // ;, but not clause operators.
+                    terminated(token(ControlOp::Semi), not(one_of(";&"))),
+                )),
+                pair(trivia, linebreak),
+            ),
+            value(ControlOp::Newline, newline_list),
+        ))(span)
+    }
+
+    let (span, term) = map(pair(and_or, many0(pair(sep, and_or))), |(head, tail)| {
+        tail.into_iter()
+            .fold(head, |acc, (op, and_or)| List::new(acc, and_or, op).into())
+    })(span)?;
+
+    // Read the optional terminator.
+    let (span, _) = opt(sep)(span)?;
+
+    Ok((span, term))
 }
 
 #[cfg(test)]
@@ -946,6 +1126,197 @@ mod tests {
                 vec![],
             ),
             [((1, 9), (1, 10), ParseDiagnosticKind::UnexpectedToken)]
+        );
+    }
+
+    #[test]
+    fn test_pipeline() {
+        // A single command is a valid pipeline.
+        assert_parse!(
+            pipeline("! ls") => "",
+            Pipeline::new(vec![tests::lit_cmd("ls").into()])
+        );
+
+        // Make sure we can handle new lines between commands.
+        assert_parse!(
+            pipeline("ls |\n\ngrep .txt") => "",
+            Pipeline::new(
+                vec![
+                    tests::lit_cmd("ls").into(),
+                    SimpleCmd::new(
+                        Some(tests::lit_word("grep")),
+                        vec![],
+                        vec![tests::lit_word(".txt").into()],
+                    ).into()
+                ]
+            )
+        );
+
+        // Pipelines aren't separated with ||.
+        assert_parse!(pipeline("ls || grep .txt") => "|| grep .txt", tests::lit_pipeline("ls"));
+
+        // Error when the pipeline begins with a sus keyword.
+        assert_parse!(pipeline("then") => Err((1, 1), Notes: [((1, 1), "unexpected")]));
+    }
+
+    #[test]
+    fn test_simple_cmd() {
+        // Ignore backslashes for alias supressions.
+        assert_parse!(simple_cmd("\\ls") => "", tests::lit_cmd("ls"));
+
+        // Can handle just a prefix.
+        assert_parse!(
+            simple_cmd("foo=bar") => "",
+            SimpleCmd::new(
+                None,
+                vec![Assign::new(Variable::new("foo"), tests::lit_word("bar"), BinOp::Eq).into()],
+                vec![],
+            )
+        );
+
+        // Prefixes can contain assignments or redirections.
+        assert_parse!(
+            simple_cmd("foo=bar >file ls") => "",
+            SimpleCmd::new(
+                Some(tests::lit_word("ls")),
+                vec![
+                    Assign::new(Variable::new("foo"), tests::lit_word("bar"), BinOp::Eq).into(),
+                    Redir::new(None, RedirOp::Great, tests::lit_word("file")).into(),
+                ],
+                vec![],
+            )
+        );
+
+        // Warn when the command looks like a C-like comment.
+        assert_parse!(
+            simple_cmd("// echo") => "",
+            SimpleCmd::new(
+                Some(tests::lit_word("//")),
+                vec![],
+                vec![tests::lit_word("echo").into()]
+            ),
+            [((1, 1), (1, 3), ParseDiagnosticKind::NotShellCode)]
+        );
+        assert_parse!(
+            simple_cmd("/* echo */") => "echo */",
+            SimpleCmd::new(
+                Some(Word::new(vec![Lit::new("/").into(), Glob::new("*").into()])),
+                vec![],
+                vec![]
+            ),
+            [((1, 1), (1, 3), ParseDiagnosticKind::NotShellCode)]
+        );
+
+        // Not using the right "else if" keyword.
+        assert_parse!(
+            simple_cmd("elseif") => "",
+            tests::lit_cmd("elseif"),
+            [((1, 1), (1, 7), ParseDiagnosticKind::NotShellCode)]
+        );
+
+        // let expressions (which can be quoted or not).
+        assert_parse!(
+            simple_cmd("let x=0") => "",
+            SimpleCmd::new(
+                Some(tests::lit_word("let")),
+                vec![],
+                vec![ArithSeq::new(vec![
+                    ArithBinExpr::new(
+                        Variable::new("x"),
+                        tests::arith_number("0"),
+                        BinOp::Eq
+                    ).into()
+                ]).into()]
+            )
+        );
+        assert_parse!(
+            simple_cmd("let \"x = 0\"") => "",
+            SimpleCmd::new(
+                Some(tests::lit_word("let")),
+                vec![],
+                vec![ArithSeq::new(vec![
+                    ArithBinExpr::new(
+                        Variable::new("x"),
+                        tests::arith_number("0"),
+                        BinOp::Eq
+                    ).into()
+                ]).into()]
+            )
+        );
+
+        // let expressions need arguments.
+        assert_parse!(simple_cmd("let") => Err(
+            (1, 4),
+            Notes: [((1, 4), "expected a non-empty word"), ((1, 4), "expected an expression")]
+        ));
+    }
+
+    #[test]
+    fn test_term() {
+        // Handle line continuations and lists of lists.
+        assert_parse!(
+            term("ls;\\\necho 'foo' && echo 'bar'") => "",
+            List::new(
+                tests::lit_pipeline("ls"),
+                List::new(
+                    Pipeline::new(
+                        vec![
+                            SimpleCmd::new(
+                                Some(tests::lit_word("echo")),
+                                vec![],
+                                vec![Word::new(vec![SingleQuoted::new("foo").into()]).into()]
+                            ).into()
+                        ]
+                    ),
+                    Pipeline::new(
+                        vec![
+                            SimpleCmd::new(
+                                Some(tests::lit_word("echo")),
+                                vec![],
+                                vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()]
+                            ).into()
+                        ]
+                    ),
+                    ControlOp::AndIf,
+                ),
+                ControlOp::Semi,
+            ).into()
+        );
+
+        // Warn when there's an HTML entity.
+        assert_parse!(
+            term("foo &amp;&amp; bar") => ";&amp; bar",
+            List::new(
+                tests::lit_pipeline("foo"),
+                tests::lit_pipeline("amp"),
+                ControlOp::And
+            ).into(),
+            [((1, 5), (1, 10), ParseDiagnosticKind::UnexpectedToken)]
+        );
+
+        // Check if something looks like URL query parameters.
+        assert_parse!(
+            term("com&q=foo") => "",
+            List::new(
+                tests::lit_pipeline("com"),
+                Pipeline::new(
+                    vec![
+                        SimpleCmd::new(
+                            None,
+                            vec![
+                                Assign::new(
+                                    Variable::new("q"),
+                                    tests::lit_word("foo"),
+                                    BinOp::Eq
+                                ).into()
+                            ],
+                            vec![],
+                        ).into()
+                    ]
+                ),
+                ControlOp::And,
+            ).into(),
+            [((1, 4), (1, 5), ParseDiagnosticKind::UnexpectedToken)]
         );
     }
 }
