@@ -598,7 +598,7 @@ pub(crate) type List = BinExpr<ControlOp, Term>;
 pub(crate) enum Construct {
     BatsTest(BatsTest),
     BraceGroup(Term),
-    // TODO Case(CaseCmd),
+    Case(CaseCmd),
     ForLoop(ForLoop),
     // TODO Function(Function),
     If(IfCmd),
@@ -614,6 +614,32 @@ pub(crate) struct BatsTest {
     name: String,
     #[new(into)]
     body: Term,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CaseCmd {
+    word: Word,
+    clauses: Vec<CaseClause>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CaseClause {
+    pattern: Vec<Word>,
+    cmd: Option<Term>,
+    sep: Option<ClauseSep>,
+}
+
+tokenizable! {
+    /// Terminators of a `case` clause.
+    enum ClauseSep {
+        /// No subsequent matches are attempted after the first pattern match.
+        Break(";;"),
+        /// Test the patterns in the next clause, if any, and execute any
+        /// associated command-list on a successful match.
+        Continue(";;&"),
+        /// Execute the command-list associated with the next clause, if any.
+        Fallthrough(";&"),
+    }
 }
 
 #[from_structs]

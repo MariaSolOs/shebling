@@ -222,6 +222,94 @@ pub(super) fn brace_group(span: Span) -> ParseResult<Term> {
     Ok((span, term))
 }
 
+fn case_clause(span: Span) -> ParseResult<CaseClause> {
+    fn pattern_word(span: Span) -> ParseResult<Word> {
+        let (span, (word, range)) = ranged(map(many1(word_sgmt), Word::new))(span)?;
+
+        // Any literal except 'esac' is valid pattern in a case statement.
+        let esac = Keyword::Esac.token();
+        if word.as_lit().is_some_and(|lit| lit.value() == esac) {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
+                    .label("literal 'esac'", range)
+                    .help("If intended, quote it. Else add a semicolon or new line before it."),
+            );
+        }
+
+        Ok((span, word))
+    }
+
+    fn sep(span: Span) -> ParseResult<Option<ClauseSep>> {
+        alt((
+            map(
+                alt((
+                    token(ClauseSep::Continue),
+                    token(ClauseSep::Fallthrough),
+                    token(ClauseSep::Break),
+                )),
+                Some,
+            ),
+            // The separator of the last clause can be omitted.
+            map(peek(pair(linebreak, token(Keyword::Esac))), |_| None),
+        ))(span)
+    }
+
+    // Stop if we peek an 'esac'.
+    let (span, _) = not(peek(token(Keyword::Esac)))(span)?;
+
+    // Optional parenthesis:
+    let (span, _) = pair(opt(char('(')), trivia)(span)?;
+
+    // Parse the pattern.
+    let (span, pattern) = separated_list1(
+        terminated(char('|'), trivia),
+        terminated(pattern_word, trivia),
+    )(span)?;
+
+    // Check the closing parenthesis.
+    let (span, _) = pair(
+        cut(context("expected a closing ')'!", char(')'))),
+        linebreak,
+    )(span)?;
+
+    // Parse the clause's body.
+    let (span, cmd) = alt((map(peek(sep), |_| None), map(term, Some)))(span)?;
+
+    // Read the separator.
+    let (span, sep) = delimited(
+        cut(context(
+            "did you forget the separator in the previous clause?",
+            not(char(')')),
+        )),
+        sep,
+        linebreak,
+    )(span)?;
+
+    Ok((span, CaseClause::new(pattern, cmd, sep)))
+}
+
+fn case_cmd(span: Span) -> ParseResult<CaseCmd> {
+    terminated(
+        map(
+            pair(
+                // The header:
+                delimited(
+                    pair(token(Keyword::Case), trivia),
+                    word,
+                    pair(
+                        multi_trivia,
+                        cut(context("expected 'in'!", token(Keyword::In))),
+                    ),
+                ),
+                // The clauses:
+                preceded(linebreak, many0(case_clause)),
+            ),
+            |(word, clauses)| CaseCmd::new(word, clauses),
+        ),
+        cut(context("expected a closing 'esac'!", token(Keyword::Esac))),
+    )(span)
+}
+
 fn cmd(span: Span) -> ParseResult<Cmd> {
     alt((
         into(compound_cmd),
@@ -243,7 +331,7 @@ fn compound_cmd(span: Span) -> ParseResult<CompoundCmd> {
             map(if_cmd, Construct::If),
             map(for_loop, Construct::ForLoop),
             preceded(token(Keyword::Select), map(in_listed, Construct::Select)),
-            // TODO map(case_cmd, Construct::Case),
+            map(case_cmd, Construct::Case),
             map(bats_test, Construct::BatsTest),
             // TODO map(function, Construct::Function),
         )),
@@ -1010,7 +1098,7 @@ fn in_listed(span: Span) -> ParseResult<InListed> {
         span.extra.diag(
             ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
                 .label("dollar in iterator variable", range)
-                .help(format!("Simply use {}.", name)),
+                .help(format!("Simply use '{}'.", name)),
         );
     }
 
@@ -1159,7 +1247,7 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
                 span.extra.diag(
                     ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
                         .range(*range)
-                        .help("Use elif to start another branch."),
+                        .help("Use 'elif' to start another branch."),
                 );
             }
 
@@ -1374,6 +1462,75 @@ mod tests {
             Notes: [((1, 7), "missing the closing brace")],
             Diags: [((1, 6), (1, 7), ParseDiagnosticKind::SusToken)]
         ));
+    }
+
+    #[test]
+    fn test_case_clause() {
+        // The opening parenthesis is optional.
+        assert_parse!(
+            case_clause("foo) bar;;") => "",
+            CaseClause::new(
+                vec![tests::lit_word("foo")],
+                Some(tests::lit_pipeline("bar").into()),
+                Some(ClauseSep::Break),
+            )
+        );
+
+        // There can be space between the patterns.
+        assert_parse!(
+            case_clause("(  foo  |\tbar) baz;;&") => "",
+            CaseClause::new(
+                vec![tests::lit_word("foo"), tests::lit_word("bar")],
+                Some(tests::lit_pipeline("baz").into()),
+                Some(ClauseSep::Continue),
+            )
+        );
+
+        // The only invalid keyword is 'esac'.
+        assert_parse!(
+            case_clause("if | do ) foo ;;") => "",
+            CaseClause::new(
+                vec![tests::lit_word("if"), tests::lit_word("do")],
+                Some(tests::lit_pipeline("foo").into()),
+                Some(ClauseSep::Break),
+            )
+        );
+        assert_parse!(
+            case_clause("( esac ) foo ;&") => "",
+            CaseClause::new(
+                vec![tests::lit_word("esac")],
+                Some(tests::lit_pipeline("foo").into()),
+                Some(ClauseSep::Fallthrough),
+            ),
+            [((1, 3), (1, 7), ParseDiagnosticKind::SusToken)]
+        );
+
+        // The last clause can omit the separator.
+        assert_parse!(
+            case_clause("foo) bar\nesac") => "esac",
+            CaseClause::new(
+                vec![tests::lit_word("foo")],
+                Some(tests::lit_pipeline("bar").into()),
+                None,
+            )
+        );
+
+        // Missing the separator between clauses.
+        assert_parse!(case_clause("foo) bar\nbaz) qux") => Err(
+            (2, 4),
+            Notes: [((2, 4), "did you forget the separator")]
+        ));
+
+        // Missing the closing parenthesis.
+        assert_parse!(case_clause("foo | bar") => Err(
+            (1, 10),
+            Notes: [((1, 10), "expected a closing ')'")]
+        ));
+    }
+
+    #[test]
+    fn test_case_cmd() {
+        // TODO
     }
 
     #[test]

@@ -20,6 +20,8 @@ fn parse_token<'a, T: Token>(token: T) -> impl FnMut(Span<'a>) -> ParseResult<T>
 
 impl ParseToken for BinOp {}
 
+impl ParseToken for ClauseSep {}
+
 impl ParseToken for ControlOp {
     fn parse_token(self, mut span: Span) -> ParseResult<Self> {
         // Special case for ';' since we don't want to mix it up with ';;'.

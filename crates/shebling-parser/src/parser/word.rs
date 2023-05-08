@@ -248,7 +248,7 @@ pub(super) fn word(span: Span) -> ParseResult<Word> {
         {
             span.extra.diag(
                 ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
-                    .label(format!("literal {}", lit), range)
+                    .label(format!("literal '{}'", lit), range)
                     .help("If intended, quote it. Else add a semicolon or new line before it."),
             );
         }

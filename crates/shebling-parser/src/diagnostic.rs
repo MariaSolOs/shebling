@@ -107,6 +107,7 @@ impl ParseDiagnosticBuilder {
     }
 }
 
+// TODO: Combine/separate diagnostics.
 #[derive(Clone, Debug, Error, miette::Diagnostic)]
 pub(crate) enum ParseDiagnosticKind {
     #[error("Bad escaping!")]
