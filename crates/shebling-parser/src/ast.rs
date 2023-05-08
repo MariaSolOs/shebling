@@ -319,7 +319,7 @@ pub(crate) enum WordSgmt {
     DoubleQuoted(DoubleQuoted),
     Glob(Glob),
     Lit(Lit),
-    // TODO ProcSub(ProcSub),
+    ProcSub(ProcSub),
     SingleQuoted(SingleQuoted),
 }
 
@@ -339,6 +339,11 @@ impl Lit {
     pub(crate) fn value(&self) -> &str {
         &self.value
     }
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct ProcSub {
+    list: Vec<Term>,
 }
 
 #[derive(Debug, PartialEq)]

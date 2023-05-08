@@ -1,3 +1,2 @@
-do
-foo
-done <(
+if true; then
+fi

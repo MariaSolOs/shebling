@@ -195,6 +195,17 @@ pub(super) fn lit_word_sgmt<'a>(
     into(lit(lit_string(end_pattern)))
 }
 
+fn proc_sub(span: Span) -> ParseResult<ProcSub> {
+    map(
+        delimited(
+            tuple((one_of("<>"), char('('), multi_trivia)),
+            many0(term),
+            pair(multi_trivia, char(')')),
+        ),
+        ProcSub::new,
+    )(span)
+}
+
 fn subscript(span: Span) -> ParseResult<Subscript> {
     delimited(
         char('['),
@@ -284,7 +295,7 @@ fn word_sgmt_before_pattern<'a>(
             unquoted_dollar_sgmt,
             into(brace_expansion),
             into(backquoted),
-            // TODO into(proc_sub),
+            into(proc_sub),
             into(lit(alt((single_uniquote, double_uniquote)))),
             lit_word_sgmt(pattern),
             // Literal curly braces:
@@ -346,6 +357,11 @@ mod tests {
         assert_parse!(lit("") => Err(1, 1));
         // If not escaped, it cannot be a special character.
         assert_parse!(lit("$") => Err(1, 1));
+    }
+
+    #[test]
+    fn test_proc_sub() {
+        // TODO
     }
 
     #[test]
