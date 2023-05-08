@@ -188,13 +188,109 @@ static COMMON_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     ])
 });
 
+// TODO: Divide these into separate modules.
+
+fn bats_test(span: Span) -> ParseResult<BatsTest> {
+    // Read the test header.
+    let (span, mut header) = preceded(
+        pair(tag("@test "), trivia),
+        peek(recognize_string(is_not("\n"))),
+    )(span)?;
+
+    // The test name is everything before the last ' {'.
+    if let Some(header_len) = header.rfind(" {") {
+        header.truncate(header_len);
+    } else {
+        return context("invalid test name!", fail)(span);
+    }
+
+    // Parse the test body defined after the truncated header.
+    let (span, body) = preceded(
+        pair(take(header.len()), trivia),
+        context("invalid test body!", brace_group),
+    )(span)?;
+
+    Ok((span, BatsTest::new(header.trim_end(), body)))
+}
+
+fn brace_group(span: Span) -> ParseResult<Term> {
+    // Check spacing after the opening brace, but note that '{(' is legal.
+    let (span, (start, space, paren)) = tuple((
+        terminated(position, char('{')),
+        multi_trivia,
+        followed_by(char('(')),
+    ))(span)?;
+    if space.is_empty() && !paren {
+        span.extra
+            .diag(ParseDiagnostic::builder(ParseDiagnosticKind::MissingSpace).range(&span));
+    }
+
+    // Check for empty groups.
+    let (span, closing_brace) = opt(peek(preceded(char('}'), position)))(span)?;
+    if let Some(end) = closing_brace {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
+                .label("empty code block", Range::new(start, end)),
+        );
+    }
+
+    // Parse the braced term.
+    let (span, term) = term(span)?;
+
+    // Check the closing brace.
+    let (span, _) = terminated(
+        context(
+            "missing the closing brace (or the semicolon or newline before it)",
+            char('}'),
+        ),
+        trivia,
+    )(span)?;
+
+    Ok((span, term))
+}
+
 fn cmd(span: Span) -> ParseResult<Cmd> {
     alt((
-        // TODO into(compound_cmd),
+        into(compound_cmd),
         into(cond_cmd),
-        // TODO into(coproc),
+        into(coproc),
         into(simple_cmd),
     ))(span)
+}
+
+fn compound_cmd(span: Span) -> ParseResult<CompoundCmd> {
+    // Read the command and suffix redirections.
+    let (span, (cmd, redirs)) = pair(
+        alt((
+            map(brace_group, Construct::BraceGroup),
+            // TODO: readAmbiguous "((" readArithmeticExpression readSubshell and consider error 1105
+            map(subshell, Construct::Subshell),
+            map(cond_block(Keyword::While), Construct::While),
+            map(cond_block(Keyword::Until), Construct::Until),
+            // TODO map(if_cmd, Construct::If),
+            // TODO map(for_loop, Construct::ForLoop),
+            // TODO preceded(token(Keyword::Select), map(in_listed, Construct::Select)),
+            // TODO map(case_cmd, Construct::Case),
+            map(bats_test, Construct::BatsTest),
+            // TODO map(function, Construct::Function),
+        )),
+        many0(redir),
+    )(span)?;
+
+    // Check for post-command gibberish.
+    let (span, trailing) = opt(peek(preceded(
+        not(alt((peek_sus_token, swallow(peek(char('{')))))),
+        ranged(many1(word)),
+    )))(span)?;
+    if let Some((_, range)) = trailing {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
+                .label("trailing words after compound command", range)
+                .help("You might have bad redirections or a missing operator."),
+        );
+    }
+
+    Ok((span, CompoundCmd::new(cmd, redirs)))
 }
 
 fn cond(span: Span) -> ParseResult<Cond> {
@@ -649,6 +745,15 @@ fn cond(span: Span) -> ParseResult<Cond> {
     Ok((span, cond))
 }
 
+fn cond_block<'a>(keyword: Keyword) -> impl FnMut(Span<'a>) -> ParseResult<CondBlock> {
+    preceded(
+        pair(token(keyword), trivia),
+        map(pair(term, do_group), |(cond, block)| {
+            CondBlock::new(cond, block)
+        }),
+    )
+}
+
 fn cond_cmd(span: Span) -> ParseResult<CondCmd> {
     // Read the condition and suffix redirections.
     let (span, (cond, redirs)) = pair(cond, many0(redir))(span)?;
@@ -683,6 +788,61 @@ fn cond_cmd(span: Span) -> ParseResult<CondCmd> {
     }
 
     Ok((span, CondCmd::new(cond, redirs)))
+}
+
+fn coproc(span: Span) -> ParseResult<Coproc> {
+    preceded(
+        pair(token(Keyword::Coproc), whitespace),
+        alt((
+            map(
+                pair(opt(terminated(identifier, whitespace)), compound_cmd),
+                |(name, cmd)| Coproc::new(name, cmd),
+            ),
+            map(simple_cmd, |cmd| Coproc::new(None, cmd)),
+        )),
+    )(span)
+}
+
+fn do_group(span: Span) -> ParseResult<Term> {
+    // 'do' should come before the 'done'.
+    let (span, _) = context(
+        "did you forget the 'do' for this loop?",
+        not(token(Keyword::Done)),
+    )(span)?;
+
+    // Parse the 'do'.
+    let (span, _) = terminated(context("expected 'do'!", token(Keyword::Do)), trivia)(span)?;
+
+    // Warn about 'do;'s.
+    let (span, semi) = terminated(opt(ranged(token(ControlOp::Semi))), multi_trivia)(span)?;
+    if let Some((_, range)) = semi {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::BadOperator)
+                .label("semicolon after 'do'", range)
+                .help("Just delete it."),
+        );
+    }
+
+    // Parse the term, bailing if the clause is empty.
+    let (span, term) = preceded(
+        context("empty 'do' clause!", not(token(Keyword::Done))),
+        term,
+    )(span)?;
+
+    // Parse the 'done'.
+    let (span, _) = terminated(context("expected 'done'!", token(Keyword::Done)), trivia)(span)?;
+
+    // If we peek the beginning of a process substitution, the user might have missed a '<'.
+    let (span, proc_sub_start) = opt(peek(ranged(tag("<("))))(span)?;
+    if let Some((_, range)) = proc_sub_start {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
+                .label("process substitution?", range)
+                .help("For redirection, use 'done < <(cmd)' (you're missing one '<')."),
+        );
+    }
+
+    Ok((span, term))
 }
 
 fn peek_sus_token(span: Span) -> ParseResult<()> {
@@ -880,6 +1040,21 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
     Ok((span, SimpleCmd::new(cmd, prefix, suffix)))
 }
 
+fn subshell(span: Span) -> ParseResult<Term> {
+    delimited(
+        // Opening parenthesis and whitespace:
+        pair(char('('), multi_trivia),
+        // The subshell's list:
+        term,
+        // Closing parenthesis and whitespace:
+        tuple((
+            multi_trivia,
+            context("expected a closing )!", char(')')),
+            trivia,
+        )),
+    )(span)
+}
+
 pub(super) fn term(span: Span) -> ParseResult<Term> {
     fn and_or(span: Span) -> ParseResult<Term> {
         // Left-fold the pipelines into a list.
@@ -985,6 +1160,60 @@ pub(super) fn term(span: Span) -> ParseResult<Term> {
 mod tests {
     use super::*;
     use crate::parser::tests;
+
+    #[test]
+    fn test_bats_test() {
+        // These tests are the ones that ShellCheck uses because idek what a bats test is.
+        assert_parse!(
+            bats_test("@test 'can parse' {\n  true\n}") => "",
+            BatsTest::new("'can parse'", tests::lit_pipeline("true"))
+        );
+        assert_parse!(
+            bats_test("@test random text !(@*$Y&! {\n  true\n}") => "",
+            BatsTest::new("random text !(@*$Y&!", tests::lit_pipeline("true"))
+        );
+        assert_parse!(
+            bats_test("@test foo { bar { baz {\n  true\n}") => "",
+            BatsTest::new("foo { bar { baz", tests::lit_pipeline("true"))
+        );
+        assert_parse!(bats_test("@test foo \n{\n true\n}") => Err(
+            (1, 7),
+            Notes: [((1, 7), "invalid test name")]
+        ));
+    }
+
+    #[test]
+    fn test_brace_group() {
+        // Space after the opening brace is required except if we have {(.
+        assert_parse!(
+            brace_group("{foo;}") => "",
+            Term::from(tests::lit_pipeline("foo")),
+            [((1, 2), ParseDiagnosticKind::MissingSpace)]
+        );
+
+        // TODO: Add a test for {()}
+        // The space before the } can be omitted if there's a semicolon.
+        assert_parse!(brace_group("{ foo;}") => "", Term::from(tests::lit_pipeline("foo")));
+
+        // Empty code blocks aren't allowed.
+        assert_parse!(brace_group("{ }") => Err(
+            (1, 3),
+            Notes: [((1, 3), "unexpected token")],
+            Diags: [((1, 1), (1, 4), ParseDiagnosticKind::SusToken)]
+        ));
+
+        // The closing curly needs a semicolon or newline before it.
+        assert_parse!(brace_group("{ foo}") => Err(
+            (1, 7),
+            Notes: [((1, 7), "missing the closing brace")],
+            Diags: [((1, 6), (1, 7), ParseDiagnosticKind::SusToken)]
+        ));
+    }
+
+    #[test]
+    fn test_compound_command() {
+        // TODO
+    }
 
     #[test]
     fn test_cond() {
@@ -1130,6 +1359,16 @@ mod tests {
     }
 
     #[test]
+    fn test_coproc() {
+        // TODO
+    }
+
+    #[test]
+    fn test_do_group() {
+        // TODO
+    }
+
+    #[test]
     fn test_pipeline() {
         // A single command is a valid pipeline.
         assert_parse!(
@@ -1249,6 +1488,13 @@ mod tests {
             (1, 4),
             Notes: [((1, 4), "expected a non-empty word"), ((1, 4), "expected an expression")]
         ));
+    }
+
+    #[test]
+    fn test_subshell() {
+        // Since parentheses are operators, they don't need to be separated
+        // from the list by whitespace.
+        assert_parse!(subshell("(foo)") => "", Term::from(tests::lit_pipeline("foo")));
     }
 
     #[test]

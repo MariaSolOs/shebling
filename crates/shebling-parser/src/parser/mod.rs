@@ -12,7 +12,7 @@ mod word;
 
 use nom::{
     branch::alt,
-    bytes::complete::{is_a, is_not, tag, tag_no_case, take_till},
+    bytes::complete::{is_a, is_not, tag, tag_no_case, take, take_till},
     character::complete::{alpha1, alphanumeric1, anychar, char, digit1, newline, one_of, satisfy},
     combinator::{
         all_consuming, consumed, cut, eof, fail, into, map, not, opt, peek, recognize, value,
@@ -48,7 +48,7 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    match assign(source_to_span(source_code)).finish() {
+    match redir(source_to_span(source_code)).finish() {
         Ok((span, res)) => {
             // println!("{:#?}", span);
             // println!("{:#?}", res);

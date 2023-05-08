@@ -511,16 +511,29 @@ pub(crate) struct Redir {
 #[from_structs]
 #[derive(Debug, PartialEq)]
 pub(crate) enum Cmd {
-    // TODO Compound(CompoundCmd),
+    Compound(CompoundCmd),
     Cond(CondCmd),
-    // TODO Coproc(Coproc),
+    Coproc(Coproc),
     Simple(SimpleCmd),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CompoundCmd {
+    cmd: Construct,
+    redirs: Vec<Redir>,
 }
 
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CondCmd {
     cond: Cond,
     redirs: Vec<Redir>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Coproc {
+    name: Option<String>,
+    #[new(into)]
+    cmd: Box<Cmd>,
 }
 
 #[derive(Debug, New, PartialEq)]
@@ -545,6 +558,38 @@ pub(crate) enum CmdSuffixSgmt {
     Pipeline(Pipeline),
     Redir(Redir),
     Word(Word),
+}
+// endregion
+
+// region: Command constructs.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Construct {
+    BatsTest(BatsTest),
+    BraceGroup(Term),
+    // TODO Case(CaseCmd),
+    // TODO ForLoop(ForLoop),
+    // TODO Function(Function),
+    // TODO If(IfCmd),
+    // TODO Select(InListed),
+    Subshell(Term),
+    Until(CondBlock),
+    While(CondBlock),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct BatsTest {
+    #[new(into)]
+    name: String,
+    #[new(into)]
+    body: Term,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CondBlock {
+    #[new(into)]
+    cond: Term,
+    #[new(into)]
+    block: Term,
 }
 // endregion
 

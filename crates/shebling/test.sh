@@ -1,1 +1,3 @@
-foo=((foo))
+do
+foo
+done <(

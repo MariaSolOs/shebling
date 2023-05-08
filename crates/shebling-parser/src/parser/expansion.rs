@@ -348,7 +348,7 @@ fn dollar_cmd_expansion(span: Span) -> ParseResult<DollarCmdExpansion> {
     )(span)
 }
 
-pub(super) fn dollar_cmd_sub(span: Span) -> ParseResult<DollarCmdSub> {
+fn dollar_cmd_sub(span: Span) -> ParseResult<DollarCmdSub> {
     delimited(
         pair(tag("$("), multi_trivia),
         map(
