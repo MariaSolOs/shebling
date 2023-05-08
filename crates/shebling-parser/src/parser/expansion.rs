@@ -244,7 +244,7 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                     many1(alt((
                         into(single_quoted),
                         into(double_quoted),
-                        unquoted_dollar_sgmt,
+                        dollar_sgmt,
                         into(brace_expansion),
                         into(backquoted),
                         into(lit(char('#'))),
@@ -392,6 +392,18 @@ pub(super) fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
     )(span)
 }
 
+pub(super) fn dollar_sgmt(span: Span) -> ParseResult<WordSgmt> {
+    alt((
+        into(alt((
+            dollar_exp,
+            // $"" and $'' strings.
+            preceded(char('$'), alt((into(double_quoted), into(single_quoted)))),
+        ))),
+        // A lonely dollar.
+        into(lit(char('$'))),
+    ))(span)
+}
+
 fn dollar_variable(span: Span) -> ParseResult<Variable> {
     fn dollar_ident(span: Span) -> ParseResult<String> {
         let (span, ((ident, range), has_bracket)) =
@@ -471,7 +483,7 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
                 // Special characters in parameter expansions.
                 into(lit(recognize_string(is_a("/:+-=%")))),
                 into(extglob),
-                unquoted_dollar_sgmt,
+                dollar_sgmt,
                 into(backquoted),
                 map(
                     // Literals, with maybe some escaped characters.
@@ -486,18 +498,6 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
         ),
         ParamExpansion::new,
     )(span)
-}
-
-pub(super) fn unquoted_dollar_sgmt(span: Span) -> ParseResult<WordSgmt> {
-    alt((
-        into(alt((
-            dollar_exp,
-            // $"" and $'' strings.
-            preceded(char('$'), alt((into(double_quoted), into(single_quoted)))),
-        ))),
-        // A lonely dollar.
-        into(lit(char('$'))),
-    ))(span)
 }
 
 #[cfg(test)]

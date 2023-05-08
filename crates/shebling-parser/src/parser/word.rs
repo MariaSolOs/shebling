@@ -323,7 +323,7 @@ fn word_sgmt_before_pattern<'a>(
             into(bracketed_glob),
             // Fallback for other glob prefix characters:
             into(lit(one_of("@!+["))),
-            unquoted_dollar_sgmt,
+            dollar_sgmt,
             into(brace_expansion),
             into(backquoted),
             into(proc_sub),
