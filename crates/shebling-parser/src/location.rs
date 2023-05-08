@@ -1,7 +1,7 @@
+use shebling_codegen::New;
 use std::borrow::Borrow;
 
 use crate::ParseContext;
-use shebling_codegen::New;
 
 pub(crate) type Span<'a> = nom_locate::LocatedSpan<&'a str, ParseContext>;
 

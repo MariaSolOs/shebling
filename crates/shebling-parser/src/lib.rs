@@ -7,11 +7,11 @@ mod error;
 mod location;
 mod parser;
 
+use shebling_codegen::New;
 use std::cell::RefCell;
 
 use diagnostic::{ParseDiagnostic, ParseDiagnosticBuilder};
 use location::Span;
-use shebling_codegen::New;
 
 // region: Parsing context.
 #[derive(Clone, Debug, New)]
@@ -35,7 +35,7 @@ impl ParseContext {
 }
 // endregion
 
-pub(crate) fn source_to_span(source_code: &str) -> Span {
+fn source_to_span(source_code: &str) -> Span {
     let context = ParseContext {
         diags: RefCell::new(Vec::new()),
     };

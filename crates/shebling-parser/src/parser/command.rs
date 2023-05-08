@@ -3,8 +3,6 @@ use std::collections::HashSet;
 
 use super::*;
 use crate::{location::Location, ParseContext};
-use expansion::EXTGLOB_PREFIX;
-use quoted::DOUBLE_ESCAPABLE;
 
 const UNIDASHES: &str =
     "\u{058A}\u{05BE}\u{2010}\u{2011}\u{2012}\u{2013}\u{2014}\u{2015}\u{FE63}\u{FF0D}";
@@ -188,32 +186,7 @@ static COMMON_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     ])
 });
 
-// TODO: Divide these into separate modules.
-
-fn bats_test(span: Span) -> ParseResult<BatsTest> {
-    // Read the test header.
-    let (span, mut header) = preceded(
-        pair(tag("@test "), trivia),
-        peek(recognize_string(is_not("\n"))),
-    )(span)?;
-
-    // The test name is everything before the last ' {'.
-    if let Some(header_len) = header.rfind(" {") {
-        header.truncate(header_len);
-    } else {
-        return context("invalid test name!", fail)(span);
-    }
-
-    // Parse the test body defined after the truncated header.
-    let (span, body) = preceded(
-        pair(take(header.len()), trivia),
-        context("invalid test body!", brace_group),
-    )(span)?;
-
-    Ok((span, BatsTest::new(header.trim_end(), body)))
-}
-
-fn brace_group(span: Span) -> ParseResult<Term> {
+pub(super) fn brace_group(span: Span) -> ParseResult<Term> {
     // Check spacing after the opening brace, but note that '{(' is legal.
     let (span, (start, space, paren)) = tuple((
         terminated(position, char('{')),
@@ -1160,27 +1133,6 @@ pub(super) fn term(span: Span) -> ParseResult<Term> {
 mod tests {
     use super::*;
     use crate::parser::tests;
-
-    #[test]
-    fn test_bats_test() {
-        // These tests are the ones that ShellCheck uses because idek what a bats test is.
-        assert_parse!(
-            bats_test("@test 'can parse' {\n  true\n}") => "",
-            BatsTest::new("'can parse'", tests::lit_pipeline("true"))
-        );
-        assert_parse!(
-            bats_test("@test random text !(@*$Y&! {\n  true\n}") => "",
-            BatsTest::new("random text !(@*$Y&!", tests::lit_pipeline("true"))
-        );
-        assert_parse!(
-            bats_test("@test foo { bar { baz {\n  true\n}") => "",
-            BatsTest::new("foo { bar { baz", tests::lit_pipeline("true"))
-        );
-        assert_parse!(bats_test("@test foo \n{\n true\n}") => Err(
-            (1, 7),
-            Notes: [((1, 7), "invalid test name")]
-        ));
-    }
 
     #[test]
     fn test_brace_group() {

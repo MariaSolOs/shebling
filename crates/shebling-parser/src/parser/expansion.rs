@@ -1,8 +1,7 @@
 use super::*;
-use trivia::UNISPACES;
 
 const BRACED_ESCAPABLE: &str = "}\"$`'";
-pub(crate) const EXTGLOB_PREFIX: &str = "?*@!+";
+pub(super) const EXTGLOB_PREFIX: &str = "?*@!+";
 /// [Special shell parameters](https://www.gnu.org/software/bash/manual/bash.html#Special-Parameters).
 /// Note that `$0` is not included here, we handle numerical variables separately.
 const SPECIAL_PARAMS: &str = "$?!#-@*";

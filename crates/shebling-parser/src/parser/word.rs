@@ -1,6 +1,4 @@
 use super::*;
-use expansion::EXTGLOB_PREFIX;
-use quoted::{DOUBLE_ESCAPABLE, DOUBLE_UNIQUOTES, SINGLE_UNIQUOTES};
 
 fn array(span: Span) -> ParseResult<Array> {
     // Read the opening brace, warning if it looks like a multi-D array.

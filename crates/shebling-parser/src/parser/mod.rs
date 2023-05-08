@@ -4,6 +4,7 @@ mod tests;
 
 mod command;
 mod expansion;
+mod function;
 mod quoted;
 mod redirection;
 mod token;
@@ -33,6 +34,7 @@ use crate::{
 };
 use command::*;
 use expansion::*;
+use function::*;
 use quoted::*;
 use redirection::*;
 use token::*;

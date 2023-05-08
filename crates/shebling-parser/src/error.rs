@@ -1,8 +1,9 @@
+use thiserror::Error;
+
 use crate::{
     diagnostic::ParseDiagnostic,
     location::{Location, Span},
 };
-use thiserror::Error;
 
 #[derive(Debug, Error, miette::Diagnostic)]
 #[error("Parser bailed!")]
