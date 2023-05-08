@@ -333,7 +333,7 @@ fn compound_cmd(span: Span) -> ParseResult<CompoundCmd> {
             preceded(token(Keyword::Select), map(in_listed, Construct::Select)),
             map(case_cmd, Construct::Case),
             map(bats_test, Construct::BatsTest),
-            // TODO map(function, Construct::Function),
+            map(function, Construct::Function),
         )),
         many0(redir),
     )(span)?;
@@ -1315,7 +1315,7 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
     Ok((span, SimpleCmd::new(cmd, prefix, suffix)))
 }
 
-fn subshell(span: Span) -> ParseResult<Term> {
+pub(super) fn subshell(span: Span) -> ParseResult<Term> {
     delimited(
         // Opening parenthesis and whitespace:
         pair(char('('), multi_trivia),

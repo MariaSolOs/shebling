@@ -600,7 +600,7 @@ pub(crate) enum Construct {
     BraceGroup(Term),
     Case(CaseCmd),
     ForLoop(ForLoop),
-    // TODO Function(Function),
+    Function(Function),
     If(IfCmd),
     Select(InListed),
     Subshell(Term),
@@ -659,6 +659,12 @@ pub(crate) struct ArithForLoop {
 pub(crate) struct InListed {
     name: String,
     list: Vec<Word>,
+    body: Term,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct Function {
+    name: String,
     body: Term,
 }
 

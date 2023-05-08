@@ -101,6 +101,37 @@ pub(super) fn assign(span: Span) -> ParseResult<Assign> {
     ))
 }
 
+fn bracketed_glob(span: Span) -> ParseResult<Glob> {
+    map(
+        delimited(
+            char('['),
+            pair(
+                opt(one_of("!^")),
+                alt((
+                    map(char(']'), |c| vec![c.into()]),
+                    many1(alt((
+                        // A POSIX character class.
+                        recognize_string(delimited(tag("[:"), alpha1, tag(":]"))),
+                        // Some other literal sequence.
+                        lit_string("]"),
+                        // A globby character.
+                        map(alt((char('['), one_of(EXTGLOB_PREFIX))), |c| c.into()),
+                    ))),
+                )),
+            ),
+            char(']'),
+        ),
+        |(neg_prefix, mut sgmts)| {
+            if let Some(negation) = neg_prefix {
+                // Add the negation prefix to the beginning of the glob.
+                sgmts.insert(0, negation.into());
+            }
+
+            Glob::new(format!("[{}]", sgmts.concat()))
+        },
+    )(span)
+}
+
 pub(super) fn identifier(span: Span) -> ParseResult<String> {
     recognize_string(pair(
         // Make sure that the first character is not a number.
@@ -289,7 +320,7 @@ fn word_sgmt_before_pattern<'a>(
             into(extglob),
             // Regex match characters:
             map(one_of("*?"), |c| Glob::new(c).into()),
-            // TODO into(bracketed_glob),
+            into(bracketed_glob),
             // Fallback for other glob prefix characters:
             into(lit(one_of("@!+["))),
             unquoted_dollar_sgmt,
@@ -315,6 +346,11 @@ mod tests {
 
     #[test]
     fn test_assign() {
+        // TODO
+    }
+
+    #[test]
+    fn test_bracketed_glob() {
         // TODO
     }
 
