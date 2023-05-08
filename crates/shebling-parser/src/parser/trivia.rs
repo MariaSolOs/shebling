@@ -207,6 +207,17 @@ mod tests {
     }
 
     #[test]
+    fn test_multi_trivia1() {
+        // Non-empty space.
+        assert_parse!(multi_trivia1(" ") => "", " ");
+        assert_parse!(multi_trivia1("\n\n") => "", "\n\n");
+
+        // The parsed output cannot be empty.
+        assert_parse!(multi_trivia1("") => Err((1, 1), Notes: [((1, 1), "expected whitespace")]));
+        assert_parse!(multi_trivia1("foo") => Err((1, 1), Notes: [((1, 1), "expected whitespace")]));
+    }
+
+    #[test]
     fn test_newline_list() {
         // A bunch of whitespace.
         assert_parse!(newline_list("\n  \n\t") => "", ());
