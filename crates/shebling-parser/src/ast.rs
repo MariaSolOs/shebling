@@ -559,41 +559,7 @@ pub(crate) enum CmdSuffixSgmt {
     Redir(Redir),
     Word(Word),
 }
-// endregion
 
-// region: Command constructs.
-#[derive(Debug, PartialEq)]
-pub(crate) enum Construct {
-    BatsTest(BatsTest),
-    BraceGroup(Term),
-    // TODO Case(CaseCmd),
-    // TODO ForLoop(ForLoop),
-    // TODO Function(Function),
-    // TODO If(IfCmd),
-    // TODO Select(InListed),
-    Subshell(Term),
-    Until(CondBlock),
-    While(CondBlock),
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct BatsTest {
-    #[new(into)]
-    name: String,
-    #[new(into)]
-    body: Term,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct CondBlock {
-    #[new(into)]
-    cond: Term,
-    #[new(into)]
-    block: Term,
-}
-// endregion
-
-// region: Command sequences.
 tokenizable! {
     enum ControlOp {
         And("&"),
@@ -620,4 +586,43 @@ pub(crate) struct Pipeline {
 }
 
 pub(crate) type List = BinExpr<ControlOp, Term>;
+// endregion
+
+// region: Command constructs.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Construct {
+    BatsTest(BatsTest),
+    BraceGroup(Term),
+    // TODO Case(CaseCmd),
+    // TODO ForLoop(ForLoop),
+    // TODO Function(Function),
+    If(IfCmd),
+    // TODO Select(InListed),
+    Subshell(Term),
+    Until(CondBlock),
+    While(CondBlock),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct BatsTest {
+    #[new(into)]
+    name: String,
+    #[new(into)]
+    body: Term,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct IfCmd {
+    if_branch: CondBlock,
+    elif_branches: Vec<CondBlock>,
+    else_term: Option<Term>,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct CondBlock {
+    #[new(into)]
+    cond: Term,
+    #[new(into)]
+    block: Term,
+}
 // endregion

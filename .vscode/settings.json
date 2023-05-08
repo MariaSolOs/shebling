@@ -3,5 +3,10 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
         "editor.semanticHighlighting.enabled": true
-    }
+    },
+
+    // Ignore this since I'll be removing it soon.
+    "todo-tree.filtering.excludeGlobs": [
+        "**/crates/shebling/src/parser/**"
+    ]
 }

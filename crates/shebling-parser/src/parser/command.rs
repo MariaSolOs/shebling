@@ -240,7 +240,7 @@ fn compound_cmd(span: Span) -> ParseResult<CompoundCmd> {
             map(subshell, Construct::Subshell),
             map(cond_block(Keyword::While), Construct::While),
             map(cond_block(Keyword::Until), Construct::Until),
-            // TODO map(if_cmd, Construct::If),
+            map(if_cmd, Construct::If),
             // TODO map(for_loop, Construct::ForLoop),
             // TODO preceded(token(Keyword::Select), map(in_listed, Construct::Select)),
             // TODO map(case_cmd, Construct::Case),
@@ -818,6 +818,93 @@ fn do_group(span: Span) -> ParseResult<Term> {
     Ok((span, term))
 }
 
+fn if_cmd(span: Span) -> ParseResult<IfCmd> {
+    fn branch_term<'a>(ctx: &'static str) -> impl FnMut(Span<'a>) -> ParseResult<Term> {
+        // Parse the branch's term, bailing if it's empty.
+        alt((
+            term,
+            cut(preceded(
+                peek(alt((
+                    token(Keyword::Fi),
+                    token(Keyword::Elif),
+                    token(Keyword::Else),
+                ))),
+                context(ctx, fail),
+            )),
+        ))
+    }
+
+    fn else_branch(span: Span) -> ParseResult<Term> {
+        // 'else if' is not the same as 'elif'.
+        let (span, (start, if_end)) = pair(
+            position,
+            preceded(
+                pair(token(Keyword::Else), trivia),
+                opt(peek(preceded(token(Keyword::If), position))),
+            ),
+        )(span)?;
+        if let Some(end) = if_end {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
+                    .range(Range::new(start, end))
+                    .help("Use 'elif' to start another branch."),
+            );
+        }
+
+        // Warn about 'else;'s.
+        let (span, _) = semicolon_check(Keyword::Else)(span)?;
+
+        // Parse the branch's term.
+        branch_term("empty 'else' clause!")(span)
+    }
+
+    fn if_block<'a>(keyword: Keyword) -> impl FnMut(Span<'a>) -> ParseResult<CondBlock> {
+        map(
+            pair(
+                // Read the keyword, the condition, and the 'then'.
+                delimited(
+                    pair(token(keyword), multi_trivia),
+                    term,
+                    tuple((
+                        context("expected 'then'!", token(Keyword::Then)),
+                        trivia,
+                        semicolon_check(Keyword::Then),
+                    )),
+                ),
+                branch_term("empty 'then' clause!"),
+            ),
+            |(cond, block)| CondBlock::new(cond, block),
+        )
+    }
+
+    fn semicolon_check(keyword: Keyword) -> impl Fn(Span) -> ParseResult<()> {
+        move |span| {
+            let (span, semi) = terminated(opt(ranged(token(ControlOp::Semi))), multi_trivia)(span)?;
+            if let Some((_, range)) = semi {
+                span.extra.diag(
+                    ParseDiagnostic::builder(ParseDiagnosticKind::BadOperator)
+                        .label(format!("semicolon after '{}'", keyword.token()), range)
+                        .help("Just delete it."),
+                );
+            }
+
+            Ok((span, ()))
+        }
+    }
+
+    map(
+        tuple((
+            if_block(Keyword::If),
+            many0(if_block(Keyword::Elif)),
+            terminated(
+                opt(else_branch),
+                pair(context("expected 'fi'!", token(Keyword::Fi)), trivia),
+            ),
+        )),
+        |(if_branch, elif_branches, else_term)| IfCmd::new(if_branch, elif_branches, else_term),
+    )(span)
+}
+
 fn peek_sus_token(span: Span) -> ParseResult<()> {
     // Tokens that are often misplaced in compound commands.
     alt((
@@ -1318,6 +1405,94 @@ mod tests {
     #[test]
     fn test_do_group() {
         // TODO
+    }
+
+    #[test]
+    fn test_if_cmd() {
+        fn if_block(cond: &str, branch: &str) -> CondBlock {
+            CondBlock::new(tests::lit_pipeline(cond), tests::lit_pipeline(branch))
+        }
+
+        // Vanilla if-else.
+        assert_parse!(
+            if_cmd("if true; then\nfoo\nelse bar\nfi") => "",
+            IfCmd::new(
+                if_block("true", "foo"),
+                vec![],
+                Some(tests::lit_pipeline("bar").into()),
+            )
+        );
+
+        // Handle multiple 'elif' branches and a missing 'else' branch.
+        assert_parse!(
+            if_cmd("if 0; then\nfoo\nelif 1; then\nbar\n elif 2\nthen baz\nfi") => "",
+            IfCmd::new(
+                if_block("0", "foo"),
+                vec![if_block("1", "bar"), if_block("2", "baz")],
+                None,
+            )
+        );
+
+        // Warn about 'then;'s.
+        assert_parse!(
+            if_cmd("if true; then; foo; fi") => "",
+            IfCmd::new(if_block("true", "foo"), vec![], None),
+            [((1, 14), (1, 15), ParseDiagnosticKind::BadOperator)]
+        );
+
+        // Warn when using 'else if' in the same line.
+        assert_parse!(
+            if_cmd("if 1; then foo; else if 2; then bar; fi fi") => "",
+            IfCmd::new(
+                if_block("1", "foo"),
+                vec![],
+                Some(Pipeline::new(
+                    vec![
+                        CompoundCmd::new(
+                            Construct::If(IfCmd::new(if_block("2", "bar"), vec![], None)),
+                            vec![]
+                        ).into()
+                    ]).into()
+                )
+            ),
+            [((1, 17), (1, 24), ParseDiagnosticKind::NotShellCode)]
+        );
+        // ...but don't if it's on a separate line.
+        assert_parse!(
+            if_cmd("if 1; then foo; else\nif 2; then bar; fi fi") => "",
+            IfCmd::new(
+                if_block("1", "foo"),
+                vec![],
+                Some(Pipeline::new(
+                    vec![
+                        CompoundCmd::new(
+                            Construct::If(IfCmd::new(if_block("2", "bar"), vec![], None)),
+                            vec![]
+                        ).into()
+                    ]).into()
+                )
+            )
+        );
+
+        // Missing keywords.
+        assert_parse!(if_cmd("if true; foo; fi") => Err(
+            (1, 15),
+            Notes: [((1, 15), "expected 'then'")]
+        ));
+        assert_parse!(if_cmd("if true; then foo") => Err(
+            (1, 18),
+            Notes: [((1, 18), "expected 'fi'")]
+        ));
+
+        // Empty clauses.
+        assert_parse!(if_cmd("if true; then\nfi") => Err(
+            (2, 1),
+            Notes: [((2, 1), "empty 'then'")]
+        ));
+        assert_parse!(if_cmd("if true; then foo; else\nfi") => Err(
+            (2, 1),
+            Notes: [((2, 1), "empty 'else'")]
+        ));
     }
 
     #[test]
