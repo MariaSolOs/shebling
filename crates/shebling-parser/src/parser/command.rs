@@ -241,8 +241,8 @@ fn compound_cmd(span: Span) -> ParseResult<CompoundCmd> {
             map(cond_block(Keyword::While), Construct::While),
             map(cond_block(Keyword::Until), Construct::Until),
             map(if_cmd, Construct::If),
-            // TODO map(for_loop, Construct::ForLoop),
-            // TODO preceded(token(Keyword::Select), map(in_listed, Construct::Select)),
+            map(for_loop, Construct::ForLoop),
+            preceded(token(Keyword::Select), map(in_listed, Construct::Select)),
             // TODO map(case_cmd, Construct::Case),
             map(bats_test, Construct::BatsTest),
             // TODO map(function, Construct::Function),
@@ -818,6 +818,71 @@ fn do_group(span: Span) -> ParseResult<Term> {
     Ok((span, term))
 }
 
+fn for_loop(span: Span) -> ParseResult<ForLoop> {
+    fn arith_for_loop(span: Span) -> ParseResult<ArithForLoop> {
+        // Parse the loop's header.
+        let (span, header) = delimited(
+            arith_parens(
+                '(',
+                "missing the second ( opening this arithmetic for-loop!",
+            ),
+            tuple((
+                terminated(arith_seq, pair(char(';'), trivia)),
+                terminated(arith_seq, pair(char(';'), trivia)),
+                terminated(arith_seq, trivia),
+            )),
+            arith_parens(
+                ')',
+                "missing the second ) closing this arithmetic for-loop!",
+            ),
+        )(span)?;
+
+        // There can be an optional separator before the 'do'.
+        let (span, _) = preceded(
+            trivia,
+            opt(terminated(
+                alt((preceded(token(ControlOp::Semi), linebreak), newline_list)),
+                trivia,
+            )),
+        )(span)?;
+
+        // Parse the body.
+        let (span, body) = alt((brace_group, do_group))(span)?;
+
+        Ok((span, ArithForLoop::new(header, body)))
+    }
+
+    fn arith_parens(paren: char, ctx_msg: &'static str) -> impl Fn(Span) -> ParseResult<()> {
+        move |span| {
+            // Parse both parentheses.
+            let (span, trivia) = delimited(
+                char(paren),
+                opt(ranged(trivia1)),
+                context(ctx_msg, char(paren)),
+            )(span)?;
+
+            // Can't have space in-between.
+            if let Some((_, range)) = trivia {
+                span.extra.diag(
+                    ParseDiagnostic::builder(ParseDiagnosticKind::BadSpace)
+                        .range(range)
+                        .help(format!(
+                            "Remove spacing between '{0}{0}' in this arithmetic for-loop.",
+                            paren
+                        )),
+                );
+            }
+
+            Ok((span, ()))
+        }
+    }
+
+    preceded(
+        pair(token(Keyword::For), trivia),
+        alt((into(arith_for_loop), into(in_listed))),
+    )(span)
+}
+
 fn if_cmd(span: Span) -> ParseResult<IfCmd> {
     fn branch_term<'a>(ctx: &'static str) -> impl FnMut(Span<'a>) -> ParseResult<Term> {
         // Parse the branch's term, bailing if it's empty.
@@ -903,6 +968,68 @@ fn if_cmd(span: Span) -> ParseResult<IfCmd> {
         )),
         |(if_branch, elif_branches, else_term)| IfCmd::new(if_branch, elif_branches, else_term),
     )(span)
+}
+
+fn in_list(span: Span) -> ParseResult<Vec<Word>> {
+    // Parse the 'in' keyword.
+    let (span, _) = pair(token(Keyword::In), trivia)(span)?;
+
+    // Read the list and stop when we hit a 'do', new line or semicolon.
+    let (span, (list, _)) = many_till(
+        terminated(word, trivia),
+        alt((
+            |span| {
+                let (span, _) = peek(token(Keyword::Do))(span)?;
+                // 'do' should be on a new line or statement:
+                span.extra.diag(
+                    ParseDiagnostic::builder(ParseDiagnosticKind::MissingSpace)
+                        .range(&span)
+                        .help("Add a new line or semicolon before 'do'."),
+                );
+
+                Ok((span, ()))
+            },
+            terminated(
+                alt((swallow(token(ControlOp::Semi)), swallow(line_ending))),
+                multi_trivia,
+            ),
+        )),
+    )(span)?;
+
+    Ok((span, list))
+}
+
+fn in_listed(span: Span) -> ParseResult<InListed> {
+    // Parse the iterator variable.
+    let (span, ((dollar, name), range)) =
+        terminated(ranged(pair(opt(char('$')), identifier)), multi_trivia)(span)?;
+
+    // Emit lint if there's a dollar (the iterator variable should be an
+    // identifier, not a value).
+    if dollar.is_some() {
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
+                .label("dollar in iterator variable", range)
+                .help(format!("Simply use {}.", name)),
+        );
+    }
+
+    // Parse the iterating list.
+    let (span, list) = alt((
+        in_list,
+        map(
+            opt(alt((
+                preceded(token(ControlOp::Semi), linebreak),
+                newline_list,
+            ))),
+            |_| vec![],
+        ),
+    ))(span)?;
+
+    // Parse the body.
+    let (span, body) = alt((brace_group, do_group))(span)?;
+
+    Ok((span, InListed::new(name, list, body)))
 }
 
 fn peek_sus_token(span: Span) -> ParseResult<()> {
@@ -1408,6 +1535,11 @@ mod tests {
     }
 
     #[test]
+    fn test_for_loop() {
+        // TODO
+    }
+
+    #[test]
     fn test_if_cmd() {
         fn if_block(cond: &str, branch: &str) -> CondBlock {
             CondBlock::new(tests::lit_pipeline(cond), tests::lit_pipeline(branch))
@@ -1493,6 +1625,31 @@ mod tests {
             (2, 1),
             Notes: [((2, 1), "empty 'else'")]
         ));
+    }
+
+    #[test]
+    fn test_in_list() {
+        // Lists with the right terminator:
+        assert_parse!(
+            in_list("in foo bar;") => "",
+            vec![tests::lit_word("foo"), tests::lit_word("bar")]
+        );
+        assert_parse!(
+            in_list("in foo bar  \n  ") => "",
+            vec![tests::lit_word("foo"), tests::lit_word("bar")]
+        );
+
+        // Inlined 'do's should emit a lint.
+        assert_parse!(
+            in_list("in foo bar do baz") => "do baz",
+            vec![tests::lit_word("foo"), tests::lit_word("bar")],
+            [((1, 12), ParseDiagnosticKind::MissingSpace)]
+        );
+    }
+
+    #[test]
+    fn test_in_listed() {
+        // TODO
     }
 
     #[test]

@@ -599,10 +599,10 @@ pub(crate) enum Construct {
     BatsTest(BatsTest),
     BraceGroup(Term),
     // TODO Case(CaseCmd),
-    // TODO ForLoop(ForLoop),
+    ForLoop(ForLoop),
     // TODO Function(Function),
     If(IfCmd),
-    // TODO Select(InListed),
+    Select(InListed),
     Subshell(Term),
     Until(CondBlock),
     While(CondBlock),
@@ -613,6 +613,26 @@ pub(crate) struct BatsTest {
     #[new(into)]
     name: String,
     #[new(into)]
+    body: Term,
+}
+
+#[from_structs]
+#[derive(Debug, PartialEq)]
+pub(crate) enum ForLoop {
+    Arith(ArithForLoop),
+    Listed(InListed),
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct ArithForLoop {
+    header: (ArithSeq, ArithSeq, ArithSeq),
+    body: Term,
+}
+
+#[derive(Debug, New, PartialEq)]
+pub(crate) struct InListed {
+    name: String,
+    list: Vec<Word>,
     body: Term,
 }
 
