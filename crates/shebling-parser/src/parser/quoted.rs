@@ -199,7 +199,7 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
             ParseDiagnostic::builder(ParseDiagnosticKind::BadEscape)
                 .label("the backslash before this quote is literal", &span)
                 .help("Wanna escape a single quote? 'Let'\\''s do it correctly'"),
-        )
+        );
     }
 
     // Verify the closing quote.
@@ -292,7 +292,58 @@ mod tests {
 
     #[test]
     fn test_double_quoted() {
-        // TODO
+        // Can be empty.
+        assert_parse!(double_quoted("\"\"") => "", DoubleQuoted::new(vec![]));
+
+        // Looks unclosed.
+        assert_parse!(
+            double_quoted("\"foo\nbar\"baz") => "baz",
+            DoubleQuoted::new(vec![Lit::new("foo\nbar").into()]),
+            [((1, 1), ParseDiagnosticKind::UnclosedString)]
+        );
+
+        // Can have complex stuff like dollar expansions.
+        assert_parse!(
+            double_quoted("\"${ foo; }\"") => "",
+            DoubleQuoted::new(vec![
+                DollarExp::CmdExpansion(
+                    DollarCmdExpansion::new(tests::lit_pipeline("foo"))
+                ).into()
+            ])
+        );
+
+        // Using uniquotes.
+        assert_parse!(
+            double_quoted("\"foo “bar”\"") => "",
+            DoubleQuoted::new(vec![
+                Lit::new("foo ").into(),
+                Lit::new("“").into(),
+                Lit::new("bar").into(),
+                Lit::new("”").into()
+            ]),
+            [
+                ((1, 6), (1, 7), ParseDiagnosticKind::Unichar),
+                ((1, 10), (1, 11), ParseDiagnosticKind::Unichar)
+            ]
+        );
+
+        // Double quotes can be escaped in backticks.
+        assert_parse!(
+            double_quoted("\"`\"foo\"`\"") => "",
+            DoubleQuoted::new(vec![
+                BackQuoted::new(
+                    Pipeline::new(vec![
+                        SimpleCmd::new(
+                            Some(Word::new(vec![
+                                DoubleQuoted::new(vec![Lit::new("foo").into()]).into()
+                            ])),
+                            vec![],
+                            vec![]
+                        ).into()
+                    ])
+                ).into()
+            ])
+        );
     }
 
     #[test]
