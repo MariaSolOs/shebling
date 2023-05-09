@@ -238,7 +238,7 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                             char(']'),
                         )),
                     ),
-                    |(ident, indices)| Variable::with_subscripts(ident, indices).into(),
+                    |(ident, indices)| Variable::new(ident, indices).into(),
                 ),
                 map(
                     many1(alt((
@@ -445,7 +445,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
                 recognize_string(one_of(SPECIAL_PARAMS)),
                 dollar_ident,
             )),
-            Variable::new,
+            |ident| Variable::new(ident, vec![]),
         ),
     )(span)
 }
@@ -524,8 +524,8 @@ mod tests {
             arith_seq("x++ + --y") => "",
             ArithSeq::new(vec![
                 ArithBinExpr::new(
-                    ArithUnExpr::new(Variable::new("x"), UnOp::Inc),
-                    ArithUnExpr::new(Variable::new("y"), UnOp::Dec),
+                    ArithUnExpr::new(tests::variable("x"), UnOp::Inc),
+                    ArithUnExpr::new(tests::variable("y"), UnOp::Dec),
                     BinOp::Add
                 ).into()
             ])
@@ -536,9 +536,9 @@ mod tests {
             arith_seq("a?\\\nb:c?\td : e") => "",
             ArithSeq::new(vec![
                 ArithTriExpr::new(
-                    Variable::new("a"),
-                    Variable::new("b"),
-                    ArithTriExpr::new(Variable::new("c"), Variable::new("d"), Variable::new("e")),
+                    tests::variable("a"),
+                    tests::variable("b"),
+                    ArithTriExpr::new(tests::variable("c"), tests::variable("d"), tests::variable("e")),
                 ).into()
             ])
         );
@@ -550,7 +550,7 @@ mod tests {
                 ArithGroup::new(ArithSeq::new(vec![
                     ArithBinExpr::new(
                         ArithExpansion::new(vec![
-                            DollarExp::Variable(Variable::new("x")).into(),
+                            DollarExp::Variable(tests::variable("x")).into(),
                         ]),
                         tests::arith_number("2"),
                         BinOp::Pow,
@@ -563,8 +563,8 @@ mod tests {
         assert_parse!(
             arith_seq("x+=1, y<<=2") => "",
             ArithSeq::new(vec![
-                ArithBinExpr::new(Variable::new("x"), tests::arith_number("1"), BinOp::AddEq).into(),
-                ArithBinExpr::new(Variable::new("y"), tests::arith_number("2"), BinOp::ShlEq).into()
+                ArithBinExpr::new(tests::variable("x"), tests::arith_number("1"), BinOp::AddEq).into(),
+                ArithBinExpr::new(tests::variable("y"), tests::arith_number("2"), BinOp::ShlEq).into()
             ])
         );
 
@@ -572,7 +572,7 @@ mod tests {
         assert_parse!(
             arith_seq("x -lt") => "",
             ArithSeq::new(vec![
-                ArithBinExpr::new(Variable::new("x"), Variable::new("lt"), BinOp::Sub).into()
+                ArithBinExpr::new(tests::variable("x"), tests::variable("lt"), BinOp::Sub).into()
             ]),
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
@@ -583,21 +583,21 @@ mod tests {
         // Valid sequence expressions.
         assert_parse!(
             brace_expansion("{1..5}") => "",
-            BraceExpansion::new(vec![tests::lit_word("1..5")]
+            BraceExpansion::new(vec![tests::word("1..5")]
         ));
         assert_parse!(
             brace_expansion("{$x..$y}") => "",
             BraceExpansion::new(vec![Word::new(vec![
-                DollarExp::from(Variable::new("x")).into(),
+                DollarExp::from(tests::variable("x")).into(),
                 Lit::new("..").into(),
-                DollarExp::from(Variable::new("y")).into(),
+                DollarExp::from(tests::variable("y")).into(),
             ])])
         );
 
         // The closing brace can be escaped.
         assert_parse!(
             brace_expansion("{foo,\\}}") => "",
-            BraceExpansion::new(vec![tests::lit_word("foo"), tests::lit_word("\\}")]
+            BraceExpansion::new(vec![tests::word("foo"), tests::word("\\}")]
         ));
 
         // Nested expansions are legal.
@@ -606,7 +606,7 @@ mod tests {
             BraceExpansion::new(vec![
                 Word::new(vec![
                     Lit::new("foo.").into(),
-                    BraceExpansion::new(vec![tests::lit_word("txt"), tests::lit_word("md")]).into()
+                    BraceExpansion::new(vec![tests::word("txt"), tests::word("md")]).into()
                 ])
             ],
         ));
@@ -614,7 +614,7 @@ mod tests {
         // Part of the expansion can be an empty word.
         assert_parse!(
             brace_expansion("{,foo}") => "",
-            BraceExpansion::new(vec![Word::new(vec![]), tests::lit_word("foo")]
+            BraceExpansion::new(vec![Word::new(vec![]), tests::word("foo")]
         ));
 
         // Cannot be empty.
@@ -630,7 +630,7 @@ mod tests {
         // The content can be any valid term.
         assert_parse!(
             dollar_cmd_expansion("${ foo; }") => "",
-            DollarCmdExpansion::new(tests::lit_pipeline("foo"))
+            DollarCmdExpansion::new(tests::pipeline("foo"))
         );
 
         // The term needs to end with a semicolon, else the closing curly will be
@@ -650,16 +650,16 @@ mod tests {
         // The content can be any valid term.
         assert_parse!(
             dollar_cmd_sub("$( foo )") => "",
-            DollarCmdSub::new(Some(tests::lit_pipeline("foo").into()))
+            DollarCmdSub::new(Some(tests::pipeline("foo").into()))
         );
         assert_parse!(
             dollar_cmd_sub("$(foo; ls 'bar')") => "",
             DollarCmdSub::new(Some(
                 List::new(
-                    tests::lit_pipeline("foo"),
+                    tests::pipeline("foo"),
                     Pipeline::new(vec![
                         SimpleCmd::new(
-                            Some(tests::lit_word("ls")),
+                            Some(tests::word("ls")),
                             vec![],
                             vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()],
                         ).into()
@@ -686,17 +686,17 @@ mod tests {
     #[test]
     fn test_dollar_variable() {
         // A dollar followed by an identifier is valid.
-        assert_parse!(dollar_variable("$foo") => "", Variable::new("foo"));
+        assert_parse!(dollar_variable("$foo") => "", tests::variable("foo"));
 
         // If not an identifier, it must be a special parameter.
-        assert_parse!(dollar_variable("$?") => "", Variable::new("?"));
+        assert_parse!(dollar_variable("$?") => "", tests::variable("?"));
 
         // Numerical variables are fine:
-        assert_parse!(dollar_variable("$1") => "", Variable::new("1"));
+        assert_parse!(dollar_variable("$1") => "", tests::variable("1"));
         // ...but if they're multi-digit we emit a diagnostic.
         assert_parse!(
             dollar_variable("$123") => "23",
-            Variable::new("1"),
+            tests::variable("1"),
             [((1, 2), (1, 5), ParseDiagnosticKind::Unbraced)]
         );
 

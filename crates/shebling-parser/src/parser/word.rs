@@ -37,7 +37,7 @@ fn array(span: Span) -> ParseResult<Array> {
     ))(span)?;
 
     // Read the closing brace.
-    let (span, _) = context("expected a closing ) for this array!", char(')'))(span)?;
+    let (span, _) = context("expected a closing ')' for this array!", char(')'))(span)?;
 
     Ok((span, Array::new(elems)))
 }
@@ -97,7 +97,7 @@ pub(super) fn assign(span: Span) -> ParseResult<Assign> {
 
     Ok((
         span,
-        Assign::new(Variable::with_subscripts(ident, subscripts), value, op),
+        Assign::new(Variable::new(ident, subscripts), value, op),
     ))
 }
 

@@ -225,6 +225,7 @@ pub(crate) struct Glob {
     pattern: String,
 }
 
+// TODO: Write a macro for these impls?
 impl<S: AsRef<str> + ?Sized> PartialEq<S> for Glob {
     fn eq(&self, other: &S) -> bool {
         self.pattern == other.as_ref()
@@ -346,23 +347,11 @@ pub(crate) struct ProcSub {
     list: Vec<Term>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, New, PartialEq)]
 pub(crate) struct Variable {
+    #[new(into)]
     ident: String,
     subscripts: Vec<Subscript>,
-}
-
-impl Variable {
-    pub(crate) fn new(ident: impl Into<String>) -> Self {
-        Self::with_subscripts(ident, vec![])
-    }
-
-    pub(crate) fn with_subscripts(ident: impl Into<String>, subscripts: Vec<Subscript>) -> Self {
-        Self {
-            ident: ident.into(),
-            subscripts,
-        }
-    }
 }
 
 #[derive(Debug, New, PartialEq)]
@@ -458,26 +447,10 @@ pub(crate) struct CondGroup {
     group: Box<CondExpr>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, New, PartialEq)]
 pub(crate) struct Cond {
     single_bracketed: bool,
     expr: Option<CondExpr>,
-}
-
-impl Cond {
-    pub(crate) fn empty(single_bracketed: bool) -> Self {
-        Self {
-            single_bracketed,
-            expr: None,
-        }
-    }
-
-    pub(crate) fn with_expr(single_bracketed: bool, expr: impl Into<CondExpr>) -> Self {
-        Self {
-            single_bracketed,
-            expr: Some(expr.into()),
-        }
-    }
 }
 // endregion
 
@@ -657,8 +630,10 @@ pub(crate) struct ArithForLoop {
 
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct InListed {
+    #[new(into)]
     name: String,
     list: Vec<Word>,
+    #[new(into)]
     body: Term,
 }
 

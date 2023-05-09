@@ -259,7 +259,7 @@ mod tests {
         // Lint for the wrong kind of backquote.
         assert_parse!(
             backquoted("´foo´") => "",
-            BackQuoted::new(tests::lit_pipeline("foo")),
+            BackQuoted::new(tests::pipeline("foo")),
             [
                 ((1, 1), (1, 2), ParseDiagnosticKind::SusToken),
                 ((1, 5), (1, 6), ParseDiagnosticKind::SusToken)
@@ -269,14 +269,14 @@ mod tests {
         // Unclosed string warning.
         assert_parse!(
             backquoted("`foo\n`bar") => "bar",
-            BackQuoted::new(tests::lit_pipeline("foo")),
+            BackQuoted::new(tests::pipeline("foo")),
             [((1, 1), ParseDiagnosticKind::UnclosedString)]
         );
 
         // Make sure lints from the subparser are included.
         assert_parse!(
             backquoted("`foo\\nbar`") => "",
-            BackQuoted::new(tests::lit_pipeline("foonbar")),
+            BackQuoted::new(tests::pipeline("foonbar")),
             [((1, 5), (1, 7), ParseDiagnosticKind::BadEscape)]
         );
     }
@@ -307,7 +307,7 @@ mod tests {
             double_quoted("\"${ foo; }\"") => "",
             DoubleQuoted::new(vec![
                 DollarExp::CmdExpansion(
-                    DollarCmdExpansion::new(tests::lit_pipeline("foo"))
+                    DollarCmdExpansion::new(tests::pipeline("foo"))
                 ).into()
             ])
         );

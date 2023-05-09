@@ -9,7 +9,7 @@ pub(super) fn redir(span: Span) -> ParseResult<Redir> {
                 alt((
                     map(char('&'), |_| FileDesc::StdOutErr),
                     map(delimited(char('{'), identifier, char('}')), |ident| {
-                        Variable::new(ident).into()
+                        Variable::new(ident, vec![]).into()
                     }),
                     map(digit1, |_| FileDesc::Number),
                 )),
@@ -76,30 +76,30 @@ mod tests {
         // The file descriptor can be omitted.
         assert_parse!(
             redir(">foo") => "",
-            Redir::new(None, RedirOp::Great, tests::lit_word("foo"))
+            Redir::new(None, RedirOp::Great, tests::word("foo"))
         );
 
         // Make sure that operators that are prefixed by others are correctly parsed.
         assert_parse!(
             redir("<< foo") => "",
-            Redir::new(None, RedirOp::DLess, tests::lit_word("foo"))
+            Redir::new(None, RedirOp::DLess, tests::word("foo"))
         );
 
         // Valid file descriptor duplications:
         assert_parse!(
             redir("{foo}>&1-") => "",
             Redir::new(
-                Some(Variable::new("foo").into()),
+                Some(tests::variable("foo").into()),
                 RedirOp::GreatAnd,
-                tests::lit_word("1-"),
+                tests::word("1-"),
             )
         );
         assert_parse!(
             redir("{foo}>&{bar}") => "",
             Redir::new(
-                Some(Variable::new("foo").into()),
+                Some(tests::variable("foo").into()),
                 RedirOp::GreatAnd,
-                tests::lit_word("bar"),
+                tests::word("bar"),
             )
         );
 

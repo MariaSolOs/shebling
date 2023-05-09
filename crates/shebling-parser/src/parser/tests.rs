@@ -98,15 +98,19 @@ pub(crate) fn arith_number(n: &str) -> ArithExpansion {
     ArithExpansion::new(vec![Lit::new(n).into()])
 }
 
-pub(crate) fn lit_cmd(lit: &str) -> SimpleCmd {
-    SimpleCmd::new(Some(lit_word(lit)), vec![], vec![])
+pub(crate) fn cmd(lit: &str) -> SimpleCmd {
+    SimpleCmd::new(Some(word(lit)), vec![], vec![])
 }
 
-pub(crate) fn lit_pipeline(lit: &str) -> Pipeline {
-    Pipeline::new(vec![lit_cmd(lit).into()])
+pub(crate) fn pipeline(lit: &str) -> Pipeline {
+    Pipeline::new(vec![cmd(lit).into()])
 }
 
-pub(crate) fn lit_word(lit: &str) -> Word {
+pub(crate) fn word(lit: &str) -> Word {
     Word::new(vec![Lit::new(lit).into()])
+}
+
+pub(crate) fn variable(ident: &str) -> Variable {
+    Variable::new(ident, vec![])
 }
 // endregion

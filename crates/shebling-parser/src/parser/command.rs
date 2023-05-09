@@ -777,10 +777,10 @@ fn cond(span: Span) -> ParseResult<Cond> {
     // Get the content (if it isn't an empty condition).
     let (span, bracket_following) = followed_by(char(']'))(span)?;
     let (span, cond) = if bracket_following && !space.is_empty() {
-        (span, Cond::empty(single_bracketed))
+        (span, Cond::new(single_bracketed, None))
     } else {
         map(content(single_bracketed), |expr| {
-            Cond::with_expr(single_bracketed, expr)
+            Cond::new(single_bracketed, Some(expr))
         })(span)?
     };
 
@@ -1443,13 +1443,13 @@ mod tests {
         // Space after the opening brace is required except if we have {(.
         assert_parse!(
             brace_group("{foo;}") => "",
-            Term::from(tests::lit_pipeline("foo")),
+            tests::pipeline("foo").into(),
             [((1, 2), ParseDiagnosticKind::MissingSpace)]
         );
 
         // TODO: Add a test for {()}
         // The space before the } can be omitted if there's a semicolon.
-        assert_parse!(brace_group("{ foo;}") => "", Term::from(tests::lit_pipeline("foo")));
+        assert_parse!(brace_group("{ foo;}") => "", tests::pipeline("foo").into());
 
         // Empty code blocks aren't allowed.
         assert_parse!(brace_group("{ }") => Err(
@@ -1472,8 +1472,8 @@ mod tests {
         assert_parse!(
             case_clause("foo) bar;;") => "",
             CaseClause::new(
-                vec![tests::lit_word("foo")],
-                Some(tests::lit_pipeline("bar").into()),
+                vec![tests::word("foo")],
+                Some(tests::pipeline("bar").into()),
                 Some(ClauseSep::Break),
             )
         );
@@ -1482,8 +1482,8 @@ mod tests {
         assert_parse!(
             case_clause("(  foo  |\tbar) baz;;&") => "",
             CaseClause::new(
-                vec![tests::lit_word("foo"), tests::lit_word("bar")],
-                Some(tests::lit_pipeline("baz").into()),
+                vec![tests::word("foo"), tests::word("bar")],
+                Some(tests::pipeline("baz").into()),
                 Some(ClauseSep::Continue),
             )
         );
@@ -1492,16 +1492,16 @@ mod tests {
         assert_parse!(
             case_clause("if | do ) foo ;;") => "",
             CaseClause::new(
-                vec![tests::lit_word("if"), tests::lit_word("do")],
-                Some(tests::lit_pipeline("foo").into()),
+                vec![tests::word("if"), tests::word("do")],
+                Some(tests::pipeline("foo").into()),
                 Some(ClauseSep::Break),
             )
         );
         assert_parse!(
             case_clause("( esac ) foo ;&") => "",
             CaseClause::new(
-                vec![tests::lit_word("esac")],
-                Some(tests::lit_pipeline("foo").into()),
+                vec![tests::word("esac")],
+                Some(tests::pipeline("foo").into()),
                 Some(ClauseSep::Fallthrough),
             ),
             [((1, 3), (1, 7), ParseDiagnosticKind::SusToken)]
@@ -1511,8 +1511,8 @@ mod tests {
         assert_parse!(
             case_clause("foo) bar\nesac") => "esac",
             CaseClause::new(
-                vec![tests::lit_word("foo")],
-                Some(tests::lit_pipeline("bar").into()),
+                vec![tests::word("foo")],
+                Some(tests::pipeline("bar").into()),
                 None,
             )
         );
@@ -1545,47 +1545,51 @@ mod tests {
         // Operators can be escaped or quoted.
         assert_parse!(
             cond("[ foo \\< bar ]") => "",
-            Cond::with_expr(
+            Cond::new(
                 true,
-                CondBinExpr::new(tests::lit_word("foo"), tests::lit_word("bar"), BinOp::Lt),
+                Some(CondBinExpr::new(tests::word("foo"), tests::word("bar"), BinOp::Lt).into()),
             )
         );
         assert_parse!(
             cond("[ foo '<' bar ]") => "",
-            Cond::with_expr(
+            Cond::new(
                 true,
-                CondBinExpr::new(tests::lit_word("foo"), tests::lit_word("bar"), BinOp::Lt),
+                Some(CondBinExpr::new(tests::word("foo"), tests::word("bar"), BinOp::Lt).into()),
             )
         );
 
         // Same with parentheses.
         assert_parse!(
             cond("[ '(' foo \\) ]") => "",
-            Cond::with_expr(true, CondGroup::new(tests::lit_word("foo")))
+            Cond::new(true, Some(CondGroup::new(tests::word("foo")).into()))
         );
         // ...In fact, you have to do it inside single brackets.
         assert_parse!(
             cond("[ '(' foo ) ]") => "",
-            Cond::with_expr(true, CondGroup::new(tests::lit_word("foo"))),
+            Cond::new(true, Some(CondGroup::new(tests::word("foo")).into())),
             [((1, 11), (1, 12), ParseDiagnosticKind::MissingEscape)]
         );
         // ...But in double brackets is wrong to do it.
         assert_parse!(
             cond("[[ '(' foo ) ]]") => "",
-            Cond::with_expr(false, CondGroup::new(tests::lit_word("foo"))),
+            Cond::new(false, Some(CondGroup::new(tests::word("foo")).into())),
             [((1, 4), (1, 7), ParseDiagnosticKind::BadEscape)]
         );
 
         // New lines have to be escaped inside single brackets.
-        assert_parse!(cond("[\n]") => "", Cond::empty(true), [((1, 2), (2, 1), ParseDiagnosticKind::MissingEscape)]);
+        assert_parse!(
+            cond("[\n]") => "",
+            Cond::new(true, None),
+            [((1, 2), (2, 1), ParseDiagnosticKind::MissingEscape)]
+        );
 
         // Empty conditions are legal.
-        assert_parse!(cond("[[ ]]") => "", Cond::empty(false));
+        assert_parse!(cond("[[ ]]") => "", Cond::new(false, None));
 
         // Bracket mismatch.
         assert_parse!(
             cond("[ ]]") => "",
-            Cond::empty(true),
+            Cond::new(true, None),
             [((1, 3), (1, 5), ParseDiagnosticKind::SusToken)]
         );
 
@@ -1655,20 +1659,20 @@ mod tests {
         // Valid condition commands.
         assert_parse!(
             cond_cmd("[[ foo ]]") => "",
-            CondCmd::new(Cond::with_expr(false, tests::lit_word("foo")), vec![])
+            CondCmd::new(Cond::new(false, Some(tests::word("foo").into())), vec![])
         );
         assert_parse!(
             cond_cmd("[ foo ] > bar") => "",
             CondCmd::new(
-                Cond::with_expr(true, tests::lit_word("foo")),
-                vec![Redir::new(None, RedirOp::Great, tests::lit_word("bar"))]
+                Cond::new(true, Some(tests::word("foo").into())),
+                vec![Redir::new(None, RedirOp::Great, tests::word("bar"))]
             )
         );
 
         // Wrong operator between conditions.
         assert_parse!(
             cond_cmd("[ foo ] -a [ bar ]") => "-a [ bar ]",
-            CondCmd::new(Cond::with_expr(true, tests::lit_word("foo")), vec![]),
+            CondCmd::new(Cond::new(true, Some(tests::word("foo").into())), vec![]),
             [((1, 9), (1, 11), ParseDiagnosticKind::BadOperator)]
         );
 
@@ -1676,7 +1680,7 @@ mod tests {
         assert_parse!(
             cond_cmd("[ foo ] [ bar ]") => "[ bar ]",
             CondCmd::new(
-                Cond::with_expr(true, tests::lit_word("foo")),
+                Cond::new(true, Some(tests::word("foo").into())),
                 vec![],
             ),
             [((1, 9), (1, 10), ParseDiagnosticKind::SusToken)]
@@ -1701,7 +1705,7 @@ mod tests {
     #[test]
     fn test_if_cmd() {
         fn if_block(cond: &str, branch: &str) -> CondBlock {
-            CondBlock::new(tests::lit_pipeline(cond), tests::lit_pipeline(branch))
+            CondBlock::new(tests::pipeline(cond), tests::pipeline(branch))
         }
 
         // Vanilla if-else.
@@ -1710,7 +1714,7 @@ mod tests {
             IfCmd::new(
                 if_block("true", "foo"),
                 vec![],
-                Some(tests::lit_pipeline("bar").into()),
+                Some(tests::pipeline("bar").into()),
             )
         );
 
@@ -1791,17 +1795,17 @@ mod tests {
         // Lists with the right terminator:
         assert_parse!(
             in_list("in foo bar;") => "",
-            vec![tests::lit_word("foo"), tests::lit_word("bar")]
+            vec![tests::word("foo"), tests::word("bar")]
         );
         assert_parse!(
             in_list("in foo bar  \n  ") => "",
-            vec![tests::lit_word("foo"), tests::lit_word("bar")]
+            vec![tests::word("foo"), tests::word("bar")]
         );
 
         // Inlined 'do's should emit a lint.
         assert_parse!(
             in_list("in foo bar do baz") => "do baz",
-            vec![tests::lit_word("foo"), tests::lit_word("bar")],
+            vec![tests::word("foo"), tests::word("bar")],
             [((1, 12), ParseDiagnosticKind::MissingSpace)]
         );
     }
@@ -1816,7 +1820,7 @@ mod tests {
         // A single command is a valid pipeline.
         assert_parse!(
             pipeline("! ls") => "",
-            Pipeline::new(vec![tests::lit_cmd("ls").into()])
+            Pipeline::new(vec![tests::cmd("ls").into()])
         );
 
         // Make sure we can handle new lines between commands.
@@ -1824,18 +1828,18 @@ mod tests {
             pipeline("ls |\n\ngrep .txt") => "",
             Pipeline::new(
                 vec![
-                    tests::lit_cmd("ls").into(),
+                    tests::cmd("ls").into(),
                     SimpleCmd::new(
-                        Some(tests::lit_word("grep")),
+                        Some(tests::word("grep")),
                         vec![],
-                        vec![tests::lit_word(".txt").into()],
+                        vec![tests::word(".txt").into()],
                     ).into()
                 ]
             )
         );
 
         // Pipelines aren't separated with ||.
-        assert_parse!(pipeline("ls || grep .txt") => "|| grep .txt", tests::lit_pipeline("ls"));
+        assert_parse!(pipeline("ls || grep .txt") => "|| grep .txt", tests::pipeline("ls"));
 
         // Error when the pipeline begins with a sus keyword.
         assert_parse!(pipeline("then") => Err((1, 1), Notes: [((1, 1), "unexpected")]));
@@ -1844,14 +1848,14 @@ mod tests {
     #[test]
     fn test_simple_cmd() {
         // Ignore backslashes for alias supressions.
-        assert_parse!(simple_cmd("\\ls") => "", tests::lit_cmd("ls"));
+        assert_parse!(simple_cmd("\\ls") => "", tests::cmd("ls"));
 
         // Can handle just a prefix.
         assert_parse!(
             simple_cmd("foo=bar") => "",
             SimpleCmd::new(
                 None,
-                vec![Assign::new(Variable::new("foo"), tests::lit_word("bar"), BinOp::Eq).into()],
+                vec![Assign::new(tests::variable("foo"), tests::word("bar"), BinOp::Eq).into()],
                 vec![],
             )
         );
@@ -1860,10 +1864,10 @@ mod tests {
         assert_parse!(
             simple_cmd("foo=bar >file ls") => "",
             SimpleCmd::new(
-                Some(tests::lit_word("ls")),
+                Some(tests::word("ls")),
                 vec![
-                    Assign::new(Variable::new("foo"), tests::lit_word("bar"), BinOp::Eq).into(),
-                    Redir::new(None, RedirOp::Great, tests::lit_word("file")).into(),
+                    Assign::new(tests::variable("foo"), tests::word("bar"), BinOp::Eq).into(),
+                    Redir::new(None, RedirOp::Great, tests::word("file")).into(),
                 ],
                 vec![],
             )
@@ -1873,9 +1877,9 @@ mod tests {
         assert_parse!(
             simple_cmd("// echo") => "",
             SimpleCmd::new(
-                Some(tests::lit_word("//")),
+                Some(tests::word("//")),
                 vec![],
-                vec![tests::lit_word("echo").into()]
+                vec![tests::word("echo").into()]
             ),
             [((1, 1), (1, 3), ParseDiagnosticKind::NotShellCode)]
         );
@@ -1892,7 +1896,7 @@ mod tests {
         // Not using the right "else if" keyword.
         assert_parse!(
             simple_cmd("elseif") => "",
-            tests::lit_cmd("elseif"),
+            tests::cmd("elseif"),
             [((1, 1), (1, 7), ParseDiagnosticKind::NotShellCode)]
         );
 
@@ -1900,11 +1904,11 @@ mod tests {
         assert_parse!(
             simple_cmd("let x=0") => "",
             SimpleCmd::new(
-                Some(tests::lit_word("let")),
+                Some(tests::word("let")),
                 vec![],
                 vec![ArithSeq::new(vec![
                     ArithBinExpr::new(
-                        Variable::new("x"),
+                        tests::variable("x"),
                         tests::arith_number("0"),
                         BinOp::Eq
                     ).into()
@@ -1914,11 +1918,11 @@ mod tests {
         assert_parse!(
             simple_cmd("let \"x = 0\"") => "",
             SimpleCmd::new(
-                Some(tests::lit_word("let")),
+                Some(tests::word("let")),
                 vec![],
                 vec![ArithSeq::new(vec![
                     ArithBinExpr::new(
-                        Variable::new("x"),
+                        tests::variable("x"),
                         tests::arith_number("0"),
                         BinOp::Eq
                     ).into()
@@ -1937,7 +1941,7 @@ mod tests {
     fn test_subshell() {
         // Since parentheses are operators, they don't need to be separated
         // from the list by whitespace.
-        assert_parse!(subshell("(foo)") => "", Term::from(tests::lit_pipeline("foo")));
+        assert_parse!(subshell("(foo)") => "", Term::from(tests::pipeline("foo")));
     }
 
     #[test]
@@ -1946,12 +1950,12 @@ mod tests {
         assert_parse!(
             term("ls;\\\necho 'foo' && echo 'bar'") => "",
             List::new(
-                tests::lit_pipeline("ls"),
+                tests::pipeline("ls"),
                 List::new(
                     Pipeline::new(
                         vec![
                             SimpleCmd::new(
-                                Some(tests::lit_word("echo")),
+                                Some(tests::word("echo")),
                                 vec![],
                                 vec![Word::new(vec![SingleQuoted::new("foo").into()]).into()]
                             ).into()
@@ -1960,7 +1964,7 @@ mod tests {
                     Pipeline::new(
                         vec![
                             SimpleCmd::new(
-                                Some(tests::lit_word("echo")),
+                                Some(tests::word("echo")),
                                 vec![],
                                 vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()]
                             ).into()
@@ -1976,8 +1980,8 @@ mod tests {
         assert_parse!(
             term("foo &amp;&amp; bar") => ";&amp; bar",
             List::new(
-                tests::lit_pipeline("foo"),
-                tests::lit_pipeline("amp"),
+                tests::pipeline("foo"),
+                tests::pipeline("amp"),
                 ControlOp::And
             ).into(),
             [((1, 5), (1, 10), ParseDiagnosticKind::SusToken)]
@@ -1987,15 +1991,15 @@ mod tests {
         assert_parse!(
             term("com&q=foo") => "",
             List::new(
-                tests::lit_pipeline("com"),
+                tests::pipeline("com"),
                 Pipeline::new(
                     vec![
                         SimpleCmd::new(
                             None,
                             vec![
                                 Assign::new(
-                                    Variable::new("q"),
-                                    tests::lit_word("foo"),
+                                    tests::variable("q"),
+                                    tests::word("foo"),
                                     BinOp::Eq
                                 ).into()
                             ],
