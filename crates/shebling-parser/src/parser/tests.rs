@@ -53,35 +53,13 @@ macro_rules! assert_parse {
     };
 
     ($parser:ident($source:literal) => Err($line:literal, $col:literal)) => {
-        assert_parse!($parser($source) => Err(($line, $col), Notes: [], Diags: []));
+        assert_parse!($parser($source) => Err(($line, $col),));
     };
 
     ($parser:ident($source:literal) => Err(
         ($line:literal, $col:literal),
-        Notes: [ $( (($line1:literal, $col1:literal), $note:literal) ),+ ]
-    )) => {
-        assert_parse!($parser($source) => Err(
-            ($line, $col),
-            Notes: [ $( (($line1, $col1), $note) ),+ ],
-            Diags: []
-        ));
-    };
-
-    ($parser:ident($source:literal) => Err(
-        ($line:literal, $col:literal),
-        Diags: [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $kind:path) ),+ ]
-    )) => {
-        assert_parse!($parser($source) => Err(
-            ($line, $col),
-            Notes: [],
-            Diags: [ $( (($line1, $col1), $(($line2, $col2),)? $kind) ),+ ]
-        ));
-    };
-
-    ($parser:ident($source:literal) => Err(
-        ($line:literal, $col:literal),
-        Notes: [ $( (($line1:literal, $col1:literal), $note:literal) ),* ],
-        Diags: [ $( (($line2:literal, $col2:literal), $(($line3:literal, $col3:literal),)? $kind:path) ),* ]
+        $( Notes: [ $( (($line1:literal, $col1:literal), $note:literal) ),+ ] $(,)? )?
+        $( Diags: [ $( (($line2:literal, $col2:literal), $(($line3:literal, $col3:literal),)? $kind:path) ),+ ] )?
     )) => {
         let err = $parser($crate::source_to_span($source))
             .finish()
@@ -92,24 +70,24 @@ macro_rules! assert_parse {
         ::pretty_assertions::assert_eq!(line, $line, "Actual line: {}", line);
         ::pretty_assertions::assert_eq!(column, $col, "Actual column: {}", column);
 
-        // For flexibility, just check that the notes have the expected messages.
         let mut notes = err.notes().into_iter();
-        $(
+        $($(
+            // For flexibility, just check that the notes have the expected messages.
             let note = notes.next().expect("Expected a parser note.");
             let (line, column, note) = (note.line(), note.column(), note.note());
             ::pretty_assertions::assert_eq!(line, $line1, "Actual line: {}", line);
             ::pretty_assertions::assert_eq!(column, $col1, "Actual column: {}", column);
             assert!(note.contains($note), "Expected \"{}\" to contain \"{}\"", note, $note);
-        )*
+        )+)?
         let last_note = notes.next();
         assert!(last_note.is_none(), "There's a note left: {:#?}", last_note);
 
         // Check the diagnostics.
         let mut diags = err.diags().into_iter();
-        $(
+        $($(
             let diag = diags.next().expect("Expected a parser diagnostic.");
             assert_diag_eq!(diag, (($line2, $col2), $(($line3, $col3),)? $kind));
-        )*
+        )+)?
         let last_diag = diags.next();
         assert!(last_diag.is_none(), "There's a diag left: {:#?}", last_diag);
     };
