@@ -282,7 +282,7 @@ fn case_clause(span: Span) -> ParseResult<CaseClause> {
             not(char(')')),
         )),
         sep,
-        linebreak,
+        pair(trivia, linebreak),
     )(span)?;
 
     Ok((span, CaseClause::new(pattern, cmd, sep)))
@@ -296,13 +296,15 @@ fn case_cmd(span: Span) -> ParseResult<CaseCmd> {
                 delimited(
                     pair(token(Keyword::Case), trivia),
                     word,
-                    pair(
+                    tuple((
                         multi_trivia,
                         cut(context("expected 'in'!", token(Keyword::In))),
-                    ),
+                        trivia,
+                        linebreak,
+                    )),
                 ),
                 // The clauses:
-                preceded(linebreak, many0(case_clause)),
+                many0(case_clause),
             ),
             |(word, clauses)| CaseCmd::new(word, clauses),
         ),
