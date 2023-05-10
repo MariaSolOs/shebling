@@ -508,72 +508,79 @@ mod tests {
     #[test]
     fn test_arith_seq() {
         // A single digit is fine.
-        assert_parse!(arith_seq("0") => "", ArithSeq::new(vec![tests::arith_number("0").into()]));
         assert_parse!(
-            arith_seq("!!0") => "",
-            ArithSeq::new(vec![
-                ArithUnExpr::new(
-                    ArithUnExpr::new(tests::arith_number("0"), UnOp::Not),
-                    UnOp::Not,
-                ).into()
-            ])
+            arith_seq("0"),
+            ArithSeq::new(vec![tests::arith_number("0").into()])
+        );
+        assert_parse!(
+            arith_seq("!!0"),
+            ArithSeq::new(vec![ArithUnExpr::new(
+                ArithUnExpr::new(tests::arith_number("0"), UnOp::Not),
+                UnOp::Not,
+            )
+            .into()])
         );
 
         // Pre and post increments and decrements.
         assert_parse!(
-            arith_seq("x++ + --y") => "",
-            ArithSeq::new(vec![
-                ArithBinExpr::new(
-                    ArithUnExpr::new(tests::variable("x"), UnOp::Inc),
-                    ArithUnExpr::new(tests::variable("y"), UnOp::Dec),
-                    BinOp::Add
-                ).into()
-            ])
+            arith_seq("x++ + --y"),
+            ArithSeq::new(vec![ArithBinExpr::new(
+                ArithUnExpr::new(tests::variable("x"), UnOp::Inc),
+                ArithUnExpr::new(tests::variable("y"), UnOp::Dec),
+                BinOp::Add
+            )
+            .into()])
         );
 
         // Trinary conditions with weird spacing.
         assert_parse!(
-            arith_seq("a?\\\nb:c?\td : e") => "",
-            ArithSeq::new(vec![
+            arith_seq("a?\\\nb:c?\td : e"),
+            ArithSeq::new(vec![ArithTriExpr::new(
+                tests::variable("a"),
+                tests::variable("b"),
                 ArithTriExpr::new(
-                    tests::variable("a"),
-                    tests::variable("b"),
-                    ArithTriExpr::new(tests::variable("c"), tests::variable("d"), tests::variable("e")),
-                ).into()
-            ])
+                    tests::variable("c"),
+                    tests::variable("d"),
+                    tests::variable("e")
+                ),
+            )
+            .into()])
         );
 
         // Groups and dollar expressions.
         assert_parse!(
-            arith_seq("($x ** 2)") => "",
-            ArithSeq::new(vec![
-                ArithGroup::new(ArithSeq::new(vec![
-                    ArithBinExpr::new(
-                        ArithExpansion::new(vec![
-                            DollarExp::Variable(tests::variable("x")).into(),
-                        ]),
-                        tests::arith_number("2"),
-                        BinOp::Pow,
-                    ).into(),
-                ])).into()
-            ])
+            arith_seq("($x ** 2)"),
+            ArithSeq::new(vec![ArithGroup::new(ArithSeq::new(vec![
+                ArithBinExpr::new(
+                    ArithExpansion::new(vec![DollarExp::Variable(tests::variable("x")).into(),]),
+                    tests::arith_number("2"),
+                    BinOp::Pow,
+                )
+                .into(),
+            ]))
+            .into()])
         );
 
         // A list of assignments.
         assert_parse!(
-            arith_seq("x+=1, y<<=2") => "",
+            arith_seq("x+=1, y<<=2"),
             ArithSeq::new(vec![
-                ArithBinExpr::new(tests::variable("x"), tests::arith_number("1"), BinOp::AddEq).into(),
-                ArithBinExpr::new(tests::variable("y"), tests::arith_number("2"), BinOp::ShlEq).into()
+                ArithBinExpr::new(tests::variable("x"), tests::arith_number("1"), BinOp::AddEq)
+                    .into(),
+                ArithBinExpr::new(tests::variable("y"), tests::arith_number("2"), BinOp::ShlEq)
+                    .into()
             ])
         );
 
         // Lint for using a test operator inside math stuff.
         assert_parse!(
-            arith_seq("x -lt") => "",
-            ArithSeq::new(vec![
-                ArithBinExpr::new(tests::variable("x"), tests::variable("lt"), BinOp::Sub).into()
-            ]),
+            arith_seq("x -lt"),
+            ArithSeq::new(vec![ArithBinExpr::new(
+                tests::variable("x"),
+                tests::variable("lt"),
+                BinOp::Sub
+            )
+            .into()]),
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
     }
@@ -582,11 +589,11 @@ mod tests {
     fn test_brace_expansion() {
         // Valid sequence expressions.
         assert_parse!(
-            brace_expansion("{1..5}") => "",
-            BraceExpansion::new(vec![tests::word("1..5")]
-        ));
+            brace_expansion("{1..5}"),
+            BraceExpansion::new(vec![tests::word("1..5")])
+        );
         assert_parse!(
-            brace_expansion("{$x..$y}") => "",
+            brace_expansion("{$x..$y}"),
             BraceExpansion::new(vec![Word::new(vec![
                 DollarExp::from(tests::variable("x")).into(),
                 Lit::new("..").into(),
@@ -596,26 +603,24 @@ mod tests {
 
         // The closing brace can be escaped.
         assert_parse!(
-            brace_expansion("{foo,\\}}") => "",
-            BraceExpansion::new(vec![tests::word("foo"), tests::word("\\}")]
-        ));
+            brace_expansion("{foo,\\}}"),
+            BraceExpansion::new(vec![tests::word("foo"), tests::word("\\}")])
+        );
 
         // Nested expansions are legal.
         assert_parse!(
-            brace_expansion("{foo.{txt,md}}") => "",
-            BraceExpansion::new(vec![
-                Word::new(vec![
-                    Lit::new("foo.").into(),
-                    BraceExpansion::new(vec![tests::word("txt"), tests::word("md")]).into()
-                ])
-            ],
-        ));
+            brace_expansion("{foo.{txt,md}}"),
+            BraceExpansion::new(vec![Word::new(vec![
+                Lit::new("foo.").into(),
+                BraceExpansion::new(vec![tests::word("txt"), tests::word("md")]).into()
+            ])],)
+        );
 
         // Part of the expansion can be an empty word.
         assert_parse!(
-            brace_expansion("{,foo}") => "",
-            BraceExpansion::new(vec![Word::new(vec![]), tests::word("foo")]
-        ));
+            brace_expansion("{,foo}"),
+            BraceExpansion::new(vec![Word::new(vec![]), tests::word("foo")])
+        );
 
         // Cannot be empty.
         assert_parse!(brace_expansion("{}") => Err((1, 2), Notes: [((1, 2), "invalid sequence")]));
@@ -629,7 +634,7 @@ mod tests {
     fn test_dollar_cmd_expansion() {
         // The content can be any valid term.
         assert_parse!(
-            dollar_cmd_expansion("${ foo; }") => "",
+            dollar_cmd_expansion("${ foo; }"),
             DollarCmdExpansion::new(tests::pipeline("foo"))
         );
 
@@ -649,29 +654,29 @@ mod tests {
     fn test_dollar_cmd_sub() {
         // The content can be any valid term.
         assert_parse!(
-            dollar_cmd_sub("$( foo )") => "",
+            dollar_cmd_sub("$( foo )"),
             DollarCmdSub::new(Some(tests::pipeline("foo").into()))
         );
         assert_parse!(
-            dollar_cmd_sub("$(foo; ls 'bar')") => "",
+            dollar_cmd_sub("$(foo; ls 'bar')"),
             DollarCmdSub::new(Some(
                 List::new(
                     tests::pipeline("foo"),
-                    Pipeline::new(vec![
-                        SimpleCmd::new(
-                            Some(tests::word("ls")),
-                            vec![],
-                            vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()],
-                        ).into()
-                    ]),
+                    Pipeline::new(vec![SimpleCmd::new(
+                        Some(tests::word("ls")),
+                        vec![],
+                        vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()],
+                    )
+                    .into()]),
                     ControlOp::Semi
-                ).into()
+                )
+                .into()
             ))
         );
 
         // The content can be just trivia.
-        assert_parse!(dollar_cmd_sub("$( )") => "", DollarCmdSub::new(None));
-        assert_parse!(dollar_cmd_sub("$(\n#foo\n)") => "", DollarCmdSub::new(None));
+        assert_parse!(dollar_cmd_sub("$( )"), DollarCmdSub::new(None));
+        assert_parse!(dollar_cmd_sub("$(\n#foo\n)"), DollarCmdSub::new(None));
 
         // Missing parentheses.
         assert_parse!(dollar_cmd_sub("$)") => Err(1, 1));
@@ -686,13 +691,13 @@ mod tests {
     #[test]
     fn test_dollar_variable() {
         // A dollar followed by an identifier is valid.
-        assert_parse!(dollar_variable("$foo") => "", tests::variable("foo"));
+        assert_parse!(dollar_variable("$foo"), tests::variable("foo"));
 
         // If not an identifier, it must be a special parameter.
-        assert_parse!(dollar_variable("$?") => "", tests::variable("?"));
+        assert_parse!(dollar_variable("$?"), tests::variable("?"));
 
         // Numerical variables are fine:
-        assert_parse!(dollar_variable("$1") => "", tests::variable("1"));
+        assert_parse!(dollar_variable("$1"), tests::variable("1"));
         // ...but if they're multi-digit we emit a diagnostic.
         assert_parse!(
             dollar_variable("$123") => "23",

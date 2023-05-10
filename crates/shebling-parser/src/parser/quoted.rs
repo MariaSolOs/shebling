@@ -258,7 +258,7 @@ mod tests {
     fn test_backquoted() {
         // Lint for the wrong kind of backquote.
         assert_parse!(
-            backquoted("´foo´") => "",
+            backquoted("´foo´"),
             BackQuoted::new(tests::pipeline("foo")),
             [
                 ((1, 1), (1, 2), ParseDiagnosticKind::SusToken),
@@ -275,7 +275,7 @@ mod tests {
 
         // Make sure lints from the subparser are included.
         assert_parse!(
-            backquoted("`foo\\nbar`") => "",
+            backquoted("`foo\\nbar`"),
             BackQuoted::new(tests::pipeline("foonbar")),
             [((1, 5), (1, 7), ParseDiagnosticKind::BadEscape)]
         );
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn test_backslash() {
         // An actual backslash.
-        assert_parse!(backslash("\\") => "", '\\');
+        assert_parse!(backslash("\\"), '\\');
 
         // A forward slash != backslash.
         assert_parse!(backslash("/") => Err(1, 1));
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn test_double_quoted() {
         // Can be empty.
-        assert_parse!(double_quoted("\"\"") => "", DoubleQuoted::new(vec![]));
+        assert_parse!(double_quoted("\"\""), DoubleQuoted::new(vec![]));
 
         // Looks unclosed.
         assert_parse!(
@@ -304,17 +304,16 @@ mod tests {
 
         // Can have complex stuff like dollar expansions.
         assert_parse!(
-            double_quoted("\"${ foo; }\"") => "",
-            DoubleQuoted::new(vec![
-                DollarExp::CmdExpansion(
-                    DollarCmdExpansion::new(tests::pipeline("foo"))
-                ).into()
-            ])
+            double_quoted("\"${ foo; }\""),
+            DoubleQuoted::new(vec![DollarExp::CmdExpansion(DollarCmdExpansion::new(
+                tests::pipeline("foo")
+            ))
+            .into()])
         );
 
         // Using uniquotes.
         assert_parse!(
-            double_quoted("\"foo “bar”\"") => "",
+            double_quoted("\"foo “bar”\""),
             DoubleQuoted::new(vec![
                 Lit::new("foo ").into(),
                 Lit::new("“").into(),
@@ -329,35 +328,32 @@ mod tests {
 
         // Double quotes can be escaped in backticks.
         assert_parse!(
-            double_quoted("\"`\"foo\"`\"") => "",
-            DoubleQuoted::new(vec![
-                BackQuoted::new(
-                    Pipeline::new(vec![
-                        SimpleCmd::new(
-                            Some(Word::new(vec![
-                                DoubleQuoted::new(vec![Lit::new("foo").into()]).into()
-                            ])),
-                            vec![],
-                            vec![]
-                        ).into()
-                    ])
-                ).into()
-            ])
+            double_quoted("\"`\"foo\"`\""),
+            DoubleQuoted::new(vec![BackQuoted::new(Pipeline::new(vec![SimpleCmd::new(
+                Some(Word::new(vec![DoubleQuoted::new(vec![
+                    Lit::new("foo").into()
+                ])
+                .into()])),
+                vec![],
+                vec![]
+            )
+            .into()]))
+            .into()])
         );
     }
 
     #[test]
     fn test_double_quoted_lit() {
         // Only certain characters can be escaped inside double quotes.
-        assert_parse!(double_quoted_lit("foo\\$") => "", Lit::new("foo$"));
+        assert_parse!(double_quoted_lit("foo\\$"), Lit::new("foo$"));
         assert_parse!(
-            double_quoted_lit("foo\\n") => "",
+            double_quoted_lit("foo\\n"),
             Lit::new("foo\\n"),
             [((1, 4), (1, 6), ParseDiagnosticKind::BadEscape)]
         );
 
         // A lonely dollar is fine,
-        assert_parse!(double_quoted_lit("$") => "", Lit::new("$"));
+        assert_parse!(double_quoted_lit("$"), Lit::new("$"));
         // ...but emit warning when it looks like the "literal dollar hack".
         assert_parse!(
             double_quoted_lit("$\"1") => "\"1",
@@ -373,7 +369,7 @@ mod tests {
     fn test_double_uniquote() {
         // A legit uniquote.
         assert_parse!(
-            double_uniquote("\u{201C}") => "",
+            double_uniquote("\u{201C}"),
             '\u{201C}',
             [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]
         );
@@ -385,21 +381,21 @@ mod tests {
     #[test]
     fn test_single_quoted() {
         // A correctly written single quoted string.
-        assert_parse!(single_quoted("'foo bar'") => "", SingleQuoted::new("foo bar"));
+        assert_parse!(single_quoted("'foo bar'"), SingleQuoted::new("foo bar"));
 
         // An empty string is also fine.
-        assert_parse!(single_quoted("''") => "", SingleQuoted::new(""));
+        assert_parse!(single_quoted("''"), SingleQuoted::new(""));
 
         // Warn when finding a uniquote.
         assert_parse!(
-            single_quoted("'let’s'") => "",
+            single_quoted("'let’s'"),
             SingleQuoted::new("let’s"),
             [((1, 5), (1, 6), ParseDiagnosticKind::Unichar)]
         );
 
         // The ending quote looks like a failed escape.
         assert_parse!(
-            single_quoted("'foo\\'") => "",
+            single_quoted("'foo\\'"),
             SingleQuoted::new("foo\\"),
             [((1, 6), ParseDiagnosticKind::BadEscape)]
         );
@@ -427,7 +423,7 @@ mod tests {
     fn test_single_uniquote() {
         // A legit uniquote.
         assert_parse!(
-            single_uniquote("\u{2018}") => "",
+            single_uniquote("\u{2018}"),
             '\u{2018}',
             [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]
         );

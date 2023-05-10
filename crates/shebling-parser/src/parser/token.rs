@@ -89,7 +89,7 @@ mod tests {
     fn test_parse_control_op_token() {
         // Semicolons are a special case.
         let mut parser = token(ControlOp::Semi);
-        assert_parse!(parser(";") => "", ControlOp::Semi);
+        assert_parse!(parser(";"), ControlOp::Semi);
         assert_parse!(parser(";;") => Err(1, 1));
     }
 
@@ -100,7 +100,7 @@ mod tests {
         assert_parse!(parser("if[") => Err((1, 3), Diags: [((1, 3), ParseDiagnosticKind::MissingSpace)]));
 
         // Have to be followed by the end of the file, space, or a metacharacter.
-        assert_parse!(parser("if") => "", Keyword::If);
+        assert_parse!(parser("if"), Keyword::If);
         assert_parse!(parser("if ") => " ", Keyword::If);
         assert_parse!(parser("if;") => ";", Keyword::If);
 
@@ -111,7 +111,7 @@ mod tests {
         parser = token(Keyword::Function);
         assert_parse!(parser("function foo") => " foo", Keyword::Function);
         assert_parse!(
-            parser("function") => "",
+            parser("function"),
             Keyword::Function,
             [((1, 9), ParseDiagnosticKind::MissingSpace)]
         );

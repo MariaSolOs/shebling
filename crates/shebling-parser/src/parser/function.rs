@@ -107,15 +107,15 @@ mod tests {
     fn test_bats_test() {
         // These tests are the ones that ShellCheck uses because idek what a bats test is.
         assert_parse!(
-            bats_test("@test 'can parse' {\n  true\n}") => "",
+            bats_test("@test 'can parse' {\n  true\n}"),
             BatsTest::new("'can parse'", tests::pipeline("true"))
         );
         assert_parse!(
-            bats_test("@test random text !(@*$Y&! {\n  true\n}") => "",
+            bats_test("@test random text !(@*$Y&! {\n  true\n}"),
             BatsTest::new("random text !(@*$Y&!", tests::pipeline("true"))
         );
         assert_parse!(
-            bats_test("@test foo { bar { baz {\n  true\n}") => "",
+            bats_test("@test foo { bar { baz {\n  true\n}"),
             BatsTest::new("foo { bar { baz", tests::pipeline("true"))
         );
         assert_parse!(bats_test("@test foo \n{\n true\n}") => Err(

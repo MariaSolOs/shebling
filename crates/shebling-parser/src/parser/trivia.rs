@@ -134,7 +134,7 @@ mod tests {
     fn test_carriage_return() {
         // Check parsed CR and warning.
         assert_parse!(
-            carriage_return("\r") => "",
+            carriage_return("\r"),
             '\r',
             [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
         );
@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn test_comment() {
         // A Bash comment.
-        assert_parse!(comment("# foo") => "", "# foo");
+        assert_parse!(comment("# foo"), "# foo");
 
         // Make sure we stop at the end of a line.
         assert_parse!(comment("# foo\n") => "\n", "# foo");
@@ -159,11 +159,11 @@ mod tests {
     #[test]
     fn test_line_ending() {
         // A new line is fine.
-        assert_parse!(line_ending("\n") => "", '\n');
+        assert_parse!(line_ending("\n"), '\n');
 
         // Parse CRLF but warn about the carriage return.
         assert_parse!(
-            line_ending("\r\n") => "",
+            line_ending("\r\n"),
             '\n',
             [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
         );
@@ -181,11 +181,15 @@ mod tests {
     #[test]
     fn test_line_space() {
         // Spaces and tabs are fine.
-        assert_parse!(line_space(" ") => "", ' ');
-        assert_parse!(line_space("\t") => "", '\t');
+        assert_parse!(line_space(" "), ' ');
+        assert_parse!(line_space("\t"), '\t');
 
         // Parse unicode spaces but emit warning.
-        assert_parse!(line_space("\u{A0}") => "", ' ', [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]);
+        assert_parse!(
+            line_space("\u{A0}"),
+            ' ',
+            [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]
+        );
 
         // Not a space.
         assert_parse!(line_space("\n") => Err(1, 1));
@@ -194,13 +198,13 @@ mod tests {
     #[test]
     fn test_multi_trivia() {
         // It's okay if some lines are empty.
-        assert_parse!(multi_trivia("\n \n") => "", "\n \n");
+        assert_parse!(multi_trivia("\n \n"), "\n \n");
 
         // Multiple comments.
-        assert_parse!(multi_trivia("# foo \n #bar\n") => "", "# foo \n #bar\n");
+        assert_parse!(multi_trivia("# foo \n #bar\n"), "# foo \n #bar\n");
 
         // Handle line continuations.
-        assert_parse!(multi_trivia("\\\n# foo") => "", "# foo");
+        assert_parse!(multi_trivia("\\\n# foo"), "# foo");
 
         // Stop when we should.
         assert_parse!(multi_trivia(" foo") => "foo", " ");
@@ -209,8 +213,8 @@ mod tests {
     #[test]
     fn test_multi_trivia1() {
         // Non-empty space.
-        assert_parse!(multi_trivia1(" ") => "", " ");
-        assert_parse!(multi_trivia1("\n\n") => "", "\n\n");
+        assert_parse!(multi_trivia1(" "), " ");
+        assert_parse!(multi_trivia1("\n\n"), "\n\n");
 
         // The parsed output cannot be empty.
         assert_parse!(multi_trivia1("") => Err((1, 1), Notes: [((1, 1), "expected whitespace")]));
@@ -220,7 +224,7 @@ mod tests {
     #[test]
     fn test_newline_list() {
         // A bunch of whitespace.
-        assert_parse!(newline_list("\n  \n\t") => "", ());
+        assert_parse!(newline_list("\n  \n\t"), ());
 
         // Wrong operator placement.
         assert_parse!(
@@ -238,20 +242,20 @@ mod tests {
     #[test]
     fn test_trivia() {
         // It's fine if there's nothing to parse.
-        assert_parse!(trivia("") => "", "");
+        assert_parse!(trivia(""), "");
         assert_parse!(trivia("foo") => "foo", "");
 
         // Just space.
-        assert_parse!(trivia(" \t ") => "", " \t ");
+        assert_parse!(trivia(" \t "), " \t ");
 
         // Just a comment.
-        assert_parse!(trivia("# foo") => "", "# foo");
+        assert_parse!(trivia("# foo"), "# foo");
 
         // Allow comments to have line continuations if they're not preceded by one.
         assert_parse!(trivia("# foo \\\n") => "\n", "# foo \\");
 
         // Comments without line continuations are okay.
-        assert_parse!(trivia(" \\\n# foo") => "", " # foo");
+        assert_parse!(trivia(" \\\n# foo"), " # foo");
 
         // Warn when the comment tries to have a line continuation.
         assert_parse!(
@@ -264,7 +268,7 @@ mod tests {
     #[test]
     fn test_trivia1() {
         // Non-empty space.
-        assert_parse!(trivia1(" ") => "", " ");
+        assert_parse!(trivia1(" "), " ");
 
         // The parsed output cannot be empty.
         assert_parse!(trivia1("") => Err((1, 1), Notes: [((1, 1), "expected whitespace")]));

@@ -75,19 +75,19 @@ mod tests {
     fn test_redir() {
         // The file descriptor can be omitted.
         assert_parse!(
-            redir(">foo") => "",
+            redir(">foo"),
             Redir::new(None, RedirOp::Great, tests::word("foo"))
         );
 
         // Make sure that operators that are prefixed by others are correctly parsed.
         assert_parse!(
-            redir("<< foo") => "",
+            redir("<< foo"),
             Redir::new(None, RedirOp::DLess, tests::word("foo"))
         );
 
         // Valid file descriptor duplications:
         assert_parse!(
-            redir("{foo}>&1-") => "",
+            redir("{foo}>&1-"),
             Redir::new(
                 Some(tests::variable("foo").into()),
                 RedirOp::GreatAnd,
@@ -95,7 +95,7 @@ mod tests {
             )
         );
         assert_parse!(
-            redir("{foo}>&{bar}") => "",
+            redir("{foo}>&{bar}"),
             Redir::new(
                 Some(tests::variable("foo").into()),
                 RedirOp::GreatAnd,

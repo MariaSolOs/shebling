@@ -28,6 +28,18 @@ macro_rules! assert_diag_eq {
 
 macro_rules! assert_parse {
     (
+        $parser:ident($source:literal),
+        $res:expr
+        $(, [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $kind:path) ),+ ] )?
+    ) => {
+        assert_parse!(
+            $parser($source) => "",
+            $res
+            $(, [ $( (($line1, $col1), $(($line2, $col2),)? $kind) ),+ ] )?
+        );
+    };
+
+    (
         $parser:ident($source:literal) => $unparsed:literal,
         $res:expr
         $(, [ $( (($line1:literal, $col1:literal), $(($line2:literal, $col2:literal),)? $kind:path) ),+ ] )?
