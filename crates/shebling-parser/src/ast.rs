@@ -1,5 +1,7 @@
 use shebling_codegen::{from_structs, New};
 
+// TODO: Document each type.
+
 // region: Tokens.
 /// Trait for types that represent single tokens, such as keywords
 /// and operators.

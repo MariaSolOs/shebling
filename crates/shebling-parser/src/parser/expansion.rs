@@ -452,7 +452,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
 
 pub(super) fn extglob(span: Span) -> ParseResult<Glob> {
     fn group(span: Span) -> ParseResult<String> {
-        recognize_string(delimited(char('('), sgmt, char(')')))(span)
+        delimited(char('('), sgmt, char(')'))(span)
     }
 
     fn sgmt(span: Span) -> ParseResult<String> {
@@ -480,8 +480,6 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
             many0(alt((
                 into(single_quoted),
                 into(double_quoted),
-                // Special characters in parameter expansions.
-                into(lit(recognize_string(is_a("/:+-=%")))),
                 into(extglob),
                 dollar_sgmt,
                 into(backquoted),
@@ -489,7 +487,7 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
                     // Literals, with maybe some escaped characters.
                     many1(alt((
                         escaped(BRACED_ESCAPABLE),
-                        recognize_string(is_not(BRACED_ESCAPABLE)),
+                        recognize_string(is_not(&*format!("\\{}", BRACED_ESCAPABLE))),
                     ))),
                     |lits| Lit::new(lits.concat()).into(),
                 ),
@@ -685,7 +683,7 @@ mod tests {
 
     #[test]
     fn test_dollar_exp() {
-        // TODO
+        // TODO: Add these after considering error SC1102.
     }
 
     #[test]
@@ -711,11 +709,31 @@ mod tests {
 
     #[test]
     fn test_extglob() {
-        // TODO
+        // The group can be empty.
+        assert_parse!(extglob("*()"), Glob::new("*()"));
+
+        // Nested groups and whitespace is allowed.
+        assert_parse!(extglob("*(() | !(foo))"), Glob::new("*(() | !(foo))"));
     }
 
     #[test]
     fn test_param_expansion() {
-        // TODO
+        // The closing brace can be escaped.
+        assert_parse!(
+            param_expansion("${foo\\}}"),
+            ParamExpansion::new(vec![Lit::new("foo}").into()])
+        );
+
+        // We can have nested dollar expressions.
+        assert_parse!(
+            param_expansion("${foo$(bar)}"),
+            ParamExpansion::new(vec![
+                Lit::new("foo").into(),
+                DollarExp::CmdSub(DollarCmdSub::new(Some(tests::pipeline("bar").into()))).into()
+            ])
+        );
+
+        // Can be empty.
+        assert_parse!(param_expansion("${}"), ParamExpansion::new(vec![]));
     }
 }
