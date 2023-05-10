@@ -338,20 +338,109 @@ fn word_sgmt_before_pattern<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::tests;
 
     #[test]
     fn test_array() {
-        // TODO
+        // Values can be key-value pairs, arrays, or words.
+        assert_parse!(
+            array("( [foo]=(bar) )"),
+            Array::new(vec![KeyValue::new(
+                vec![Subscript::new("foo")],
+                Array::new(vec![tests::word("bar").into()]),
+            )
+            .into()])
+        );
+        assert_parse!(
+            array("( foo bar )"),
+            Array::new(vec![tests::word("foo").into(), tests::word("bar").into()])
+        );
+        assert_parse!(
+            array("( (foo) )"),
+            Array::new(vec![Array::new(vec![tests::word("foo").into()]).into()])
+        );
+
+        // Looks like a multi-dimensional array.
+        assert_parse!(
+            array("((foo))"),
+            Array::new(vec![Array::new(vec![tests::word("foo").into()]).into()]),
+            [((1, 1), (1, 3), ParseDiagnosticKind::SusValue)]
+        );
+
+        // Missing the closing brace.
+        assert_parse!(array("( foo") => Err((1, 6), Notes: [((1, 6), "expected a closing ')'")]));
     }
 
     #[test]
     fn test_assign() {
-        // TODO
+        // Legit assignments.
+        assert_parse!(
+            assign("x+=1"),
+            Assign::new(tests::variable("x"), tests::word("1"), BinOp::AddEq)
+        );
+        assert_parse!(
+            assign("arr[0]='foo'"),
+            Assign::new(
+                Variable::new("arr", vec![Subscript::new("0")]),
+                Word::new(vec![SingleQuoted::new("foo").into()]),
+                BinOp::Eq,
+            )
+        );
+        assert_parse!(
+            assign("foo=(bar baz)"),
+            Assign::new(
+                tests::variable("foo"),
+                Array::new(vec![tests::word("bar").into(), tests::word("baz").into()]),
+                BinOp::Eq,
+            )
+        );
+
+        // Warn about empty values if they're not ending the command.
+        assert_parse!(
+            assign("foo="),
+            Assign::new(tests::variable("foo"), Value::Empty, BinOp::Eq)
+        );
+        assert_parse!(
+            assign("foo= bar") => "bar",
+            Assign::new(tests::variable("foo"), Value::Empty, BinOp::Eq),
+            [((1, 5), (1, 6), ParseDiagnosticKind::SusValue)]
+        );
+        // ...but IFS is the exception.
+        assert_parse!(
+            assign("IFS= "),
+            Assign::new(tests::variable("IFS"), Value::Empty, BinOp::Eq)
+        );
+
+        // Wrong assignment operator.
+        assert_parse!(
+            assign("foo==bar"),
+            Assign::new(tests::variable("foo"), tests::word("=bar"), BinOp::Eq),
+            [((1, 5), (1, 6), ParseDiagnosticKind::SusValue)]
+        );
+
+        // Invalid identifier.
+        assert_parse!(assign("1foo=bar") => Err((1, 1), Notes: [((1, 1), "invalid identifier")]));
+
+        // Cannot have a space before the operator.
+        assert_parse!(assign("foo =bar") => Err((1, 4), Notes: [((1, 4), "expected an assignment operator")]));
+
+        // Variable names shouldn't be prefixed with a $.
+        assert_parse!(assign("$foo=bar") => Err((1, 1), Notes: [((1, 1), "$ on the left side")]));
     }
 
     #[test]
     fn test_bracketed_glob() {
-        // TODO
+        // Predefined character class.
+        assert_parse!(bracketed_glob("[[:alpha:]]"), Glob::new("[[:alpha:]]"));
+
+        // Can be negated and have multiple segments.
+        assert_parse!(
+            bracketed_glob("[^[:alpha:]1-9]"),
+            Glob::new("[^[:alpha:]1-9]")
+        );
+
+        // ']' can be matched if it's the only character in the class.
+        assert_parse!(bracketed_glob("[]]"), Glob::new("[]]"));
     }
 
     #[test]
@@ -412,11 +501,6 @@ mod tests {
     }
 
     #[test]
-    fn test_proc_sub() {
-        // TODO
-    }
-
-    #[test]
     fn test_subscript() {
         // There has to be something inside the brackets, even if it's
         // just space.
@@ -427,11 +511,40 @@ mod tests {
 
     #[test]
     fn test_word() {
-        // TODO
+        // Can contain multiple segments, as long as there are no metacharacters in between.
+        assert_parse!(
+            word("'foo'*$bar"),
+            Word::new(vec![
+                SingleQuoted::new("foo").into(),
+                Glob::new("*").into(),
+                DollarExp::Variable(tests::variable("bar")).into()
+            ])
+        );
+
+        // Warn about literal keywords.
+        assert_parse!(
+            word("then"),
+            tests::word("then"),
+            [((1, 1), (1, 5), ParseDiagnosticKind::SusToken)]
+        );
+
+        // Can't be empty.
+        assert_parse!(word("") => Err((1, 1), Notes: [((1, 1), "expected a non-empty word")]));
     }
 
     #[test]
     fn test_word_sgmt() {
-        // TODO
+        // Warn about misplaced parentheses.
+        assert_parse!(word_sgmt("(foo)") => Err(
+            (1, 1),
+            Notes: [((1, 1), "escape this parenthesis")]
+        ));
+
+        // Curly brace being parsed as a literal.
+        assert_parse!(
+            word_sgmt("{foo;}") => "foo;}",
+            Lit::new("{").into(),
+            [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
+        );
     }
 }
