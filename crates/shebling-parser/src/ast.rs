@@ -625,6 +625,7 @@ pub(crate) enum ForLoop {
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct ArithForLoop {
     header: (ArithSeq, ArithSeq, ArithSeq),
+    #[new(into)]
     body: Term,
 }
 

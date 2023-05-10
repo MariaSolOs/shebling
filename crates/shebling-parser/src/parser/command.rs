@@ -928,12 +928,13 @@ fn for_loop(span: Span) -> ParseResult<ForLoop> {
         )(span)?;
 
         // There can be an optional separator before the 'do'.
-        let (span, _) = preceded(
+        let (span, _) = delimited(
             trivia,
-            opt(terminated(
-                alt((preceded(token(ControlOp::Semi), linebreak), newline_list)),
-                trivia,
-            )),
+            opt(alt((
+                preceded(token(ControlOp::Semi), linebreak),
+                newline_list,
+            ))),
+            trivia,
         )(span)?;
 
         // Parse the body.
@@ -1109,7 +1110,7 @@ fn in_listed(span: Span) -> ParseResult<InListed> {
         in_list,
         map(
             opt(alt((
-                preceded(token(ControlOp::Semi), linebreak),
+                preceded(pair(token(ControlOp::Semi), trivia), linebreak),
                 newline_list,
             ))),
             |_| vec![],
@@ -1532,12 +1533,66 @@ mod tests {
 
     #[test]
     fn test_case_cmd() {
-        // TODO
+        // There can be horizontal/vertical whitespace before the 'in'.
+        assert_parse!(
+            case_cmd("case foo in bar) baz;; esac") => "",
+            CaseCmd::new(
+                tests::word("foo"),
+                vec![CaseClause::new(
+                    vec![tests::word("bar")],
+                    Some(tests::pipeline("baz").into()),
+                    Some(ClauseSep::Break),
+                )],
+            )
+        );
+        assert_parse!(
+            case_cmd("case foo in\n\tbar) baz;;\nesac") => "",
+            CaseCmd::new(
+                tests::word("foo"),
+                vec![CaseClause::new(
+                    vec![tests::word("bar")],
+                    Some(tests::pipeline("baz").into()),
+                    Some(ClauseSep::Break),
+                )],
+            )
+        );
+
+        // There can be no clauses.
+        assert_parse!(
+            case_cmd("case foo in\nesac") => "",
+            CaseCmd::new(tests::word("foo"), vec![])
+        );
+
+        // Missing keywords.
+        assert_parse!(case_cmd("case foo\nbar) baz;;\nesac") => Err(
+            (2, 1),
+            Notes: [((2, 1), "expected 'in'")]
+        ));
+        assert_parse!(case_cmd("case foo in\nbar) baz;;") => Err(
+            (2, 11),
+            Notes: [((2, 11), "expected a closing 'esac'")]
+        ));
     }
 
     #[test]
     fn test_compound_command() {
-        // TODO
+        // Command with bad redirection.
+        assert_parse!(
+            compound_cmd("{ foo; }>bar baz") => "baz",
+            CompoundCmd::new(
+                Construct::BraceGroup(tests::pipeline("foo").into()),
+                vec![Redir::new(None, RedirOp::Great, tests::word("bar"))],
+            ),
+            [((1, 14), (1, 17), ParseDiagnosticKind::SusToken)]
+        );
+        // ...but don't trigger it for keywords.
+        assert_parse!(
+            compound_cmd("{ foo; }>bar do") => "do",
+            CompoundCmd::new(
+                Construct::BraceGroup(tests::pipeline("foo").into()),
+                vec![Redir::new(None, RedirOp::Great, tests::word("bar"))],
+            )
+        );
     }
 
     #[test]
@@ -1689,17 +1744,130 @@ mod tests {
 
     #[test]
     fn test_coproc() {
-        // TODO
+        // The name is optional.
+        assert_parse!(
+            coproc("coproc foo { bar; }") => "",
+            Coproc::new(
+                Some("foo".into()),
+                CompoundCmd::new(
+                    Construct::BraceGroup(tests::pipeline("bar").into()),
+                    vec![]
+                )
+            )
+        );
+        assert_parse!(
+            coproc("coproc { foo; }") => "",
+            Coproc::new(
+                None,
+                CompoundCmd::new(
+                    Construct::BraceGroup(tests::pipeline("foo").into()),
+                    vec![]
+                )
+            )
+        );
+
+        // Using a simple command.
+        assert_parse!(
+            coproc("coproc foo bar") => "",
+            Coproc::new(
+                None,
+                SimpleCmd::new(
+                    Some(tests::word("foo")),
+                    vec![],
+                    vec![tests::word("bar").into()]
+                )
+            )
+        );
     }
 
     #[test]
     fn test_do_group() {
-        // TODO
+        // Warn about 'do;s'.
+        assert_parse!(
+            do_group("do; { foo; } done") => "",
+            Pipeline::new(vec![
+                CompoundCmd::new(
+                    Construct::BraceGroup(tests::pipeline("foo").into()),
+                    vec![],
+                ).into()
+            ]).into(),
+            [((1, 3), (1, 4), ParseDiagnosticKind::BadOperator)]
+        );
+
+        // Looks like a procsub follows.
+        assert_parse!(
+            do_group("do { foo; } done <(bar)") => "<(bar)",
+            Pipeline::new(vec![
+                CompoundCmd::new(
+                    Construct::BraceGroup(tests::pipeline("foo").into()),
+                    vec![],
+                ).into()
+            ]).into(),
+            [((1, 18), (1, 20), ParseDiagnosticKind::SusToken)]
+        );
+
+        // Empty groups aren't valid.
+        assert_parse!(do_group("do done") => Err(
+            (1, 4),
+            Notes: [((1, 4), "empty 'do'")]
+        ));
     }
 
     #[test]
     fn test_for_loop() {
-        // TODO
+        // The body can be a brace group.
+        assert_parse!(
+            for_loop("for foo in *; { bar; }") => "",
+            InListed::new(
+                "foo",
+                vec![Word::new(vec![Glob::new("*").into()])],
+                Pipeline::new(vec![tests::cmd("bar").into()]),
+            ).into()
+        );
+
+        // The in-list can be empty.
+        assert_parse!(
+            for_loop("for foo; do bar; done") => "",
+            InListed::new("foo", vec![], tests::pipeline("bar")).into()
+        );
+
+        // Handle spacing with arithmetic for-loops, warning if there's
+        // whitespace between the header parens.
+        assert_parse!(
+            for_loop("for (( i=0;\ti<5; i++ ) ); do foo; done") => "",
+            ArithForLoop::new((
+                ArithSeq::new(vec![
+                    ArithBinExpr::new(
+                        tests::variable("i"),
+                        tests::arith_number("0"),
+                        BinOp::Eq,
+                    ).into()
+                ]),
+                ArithSeq::new(vec![
+                    ArithBinExpr::new(
+                        tests::variable("i"),
+                        tests::arith_number("5"),
+                        BinOp::Lt,
+                    ).into()
+                ]),
+                ArithSeq::new(vec![
+                    ArithUnExpr::new(tests::variable("i"), UnOp::Inc).into()
+                ])),
+                tests::pipeline("foo"),
+            ).into(),
+            [((1, 23), (1, 24), ParseDiagnosticKind::BadSpace)]
+        );
+
+        // The header sections can be empty.
+        assert_parse!(
+            for_loop("for ((;;)); do foo; done") => "",
+            ArithForLoop::new((
+                ArithSeq::new(vec![]),
+                ArithSeq::new(vec![]),
+                ArithSeq::new(vec![])),
+                tests::pipeline("foo"),
+            ).into()
+        );
     }
 
     #[test]
@@ -1812,7 +1980,22 @@ mod tests {
 
     #[test]
     fn test_in_listed() {
-        // TODO
+        // Dollar in iterator variable.
+        assert_parse!(
+            in_listed("$foo in bar; { baz; }") => "",
+            InListed::new(
+                "foo",
+                vec![tests::word("bar")],
+                tests::pipeline("baz"),
+            ),
+            [((1, 1), (1, 5), ParseDiagnosticKind::NotShellCode)]
+        );
+
+        // The in-list can be empty.
+        assert_parse!(
+            in_listed("foo in; { bar; }") => "",
+            InListed::new("foo", vec![], tests::pipeline("bar"))
+        );
     }
 
     #[test]
