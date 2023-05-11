@@ -1832,21 +1832,19 @@ mod tests {
             for_loop("for (( i=0;\ti<5; i++ ) ); do foo; done"),
             ArithForLoop::new(
                 (
-                    ArithSeq::new(vec![ArithBinExpr::new(
+                    vec![ArithBinExpr::new(
                         tests::variable("i"),
                         tests::arith_number("0"),
                         BinOp::Eq,
                     )
-                    .into()]),
-                    ArithSeq::new(vec![ArithBinExpr::new(
+                    .into()],
+                    vec![ArithBinExpr::new(
                         tests::variable("i"),
                         tests::arith_number("5"),
                         BinOp::Lt,
                     )
-                    .into()]),
-                    ArithSeq::new(vec![
-                        ArithUnExpr::new(tests::variable("i"), UnOp::Inc).into()
-                    ])
+                    .into()],
+                    vec![ArithUnExpr::new(tests::variable("i"), UnOp::Inc).into()]
                 ),
                 tests::pipeline("foo"),
             )
@@ -1857,15 +1855,7 @@ mod tests {
         // The header sections can be empty.
         assert_parse!(
             for_loop("for ((;;)); do foo; done"),
-            ArithForLoop::new(
-                (
-                    ArithSeq::new(vec![]),
-                    ArithSeq::new(vec![]),
-                    ArithSeq::new(vec![])
-                ),
-                tests::pipeline("foo"),
-            )
-            .into()
+            ArithForLoop::new((vec![], vec![], vec![]), tests::pipeline("foo"),).into()
         );
     }
 
@@ -2083,12 +2073,12 @@ mod tests {
             SimpleCmd::new(
                 Some(tests::word("let")),
                 vec![],
-                vec![ArithSeq::new(vec![ArithBinExpr::new(
+                vec![vec![ArithBinExpr::new(
                     tests::variable("x"),
                     tests::arith_number("0"),
                     BinOp::Eq
                 )
-                .into()])
+                .into()]
                 .into()]
             )
         );
@@ -2097,12 +2087,12 @@ mod tests {
             SimpleCmd::new(
                 Some(tests::word("let")),
                 vec![],
-                vec![ArithSeq::new(vec![ArithBinExpr::new(
+                vec![vec![ArithBinExpr::new(
                     tests::variable("x"),
                     tests::arith_number("0"),
                     BinOp::Eq
                 )
-                .into()])
+                .into()]
                 .into()]
             )
         );

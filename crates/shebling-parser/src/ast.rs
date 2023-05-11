@@ -160,29 +160,23 @@ pub(crate) struct UnExpr<O, E> {
 pub(crate) enum ArithTerm {
     BinExpr(ArithBinExpr),
     Expansion(ArithExpansion),
-    Group(ArithGroup),
+    Group(ArithSeq),
     TriExpr(ArithTriExpr),
     UnExpr(ArithUnExpr),
     Variable(Variable),
 }
 
+/// Shell expansion in an arithmetic expression.
+pub(crate) type ArithExpansion = Vec<WordSgmt>;
+
+/// An arithmetic binary expression (e.g. `$x + 1`).
 pub(crate) type ArithBinExpr = BinExpr<BinOp, ArithTerm>;
 
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct ArithExpansion {
-    sgmts: Vec<WordSgmt>,
-}
+/// Comma-delimited sequence of arithmetic terms.
+pub(crate) type ArithSeq = Vec<ArithTerm>;
 
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct ArithGroup {
-    seq: ArithSeq,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct ArithSeq {
-    terms: Vec<ArithTerm>,
-}
-
+/// An arithmetic ternary expression of the form
+/// `condition ? true_branch : else_branch`.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct ArithTriExpr {
     #[new(into)]

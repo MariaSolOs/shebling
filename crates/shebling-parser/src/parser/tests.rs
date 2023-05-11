@@ -106,8 +106,8 @@ macro_rules! assert_parse {
 }
 
 // region: Shared constructors for common (and verbose) AST objects.
-pub(crate) fn arith_number(n: &str) -> ArithExpansion {
-    ArithExpansion::new(vec![Lit::new(n).into()])
+pub(crate) fn arith_number(n: &str) -> ArithTerm {
+    ArithTerm::Expansion(vec![Lit::new(n).into()])
 }
 
 pub(crate) fn cmd(lit: &str) -> SimpleCmd {

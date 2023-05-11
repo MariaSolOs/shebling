@@ -207,10 +207,7 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     fn seq(span: Span) -> ParseResult<ArithSeq> {
         preceded(
             arith_space,
-            map(
-                separated_list0(pair(char(','), arith_space), assignment),
-                ArithSeq::new,
-            ),
+            separated_list0(pair(char(','), arith_space), assignment),
         )(span)
     }
 
@@ -222,11 +219,7 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
         terminated(
             alt((
                 // A group.
-                delimited(
-                    char('('),
-                    map(seq, |group| ArithGroup::new(group).into()),
-                    char(')'),
-                ),
+                delimited(char('('), into(seq), char(')')),
                 // A variable, which could be an array with more math stuff as an index.
                 map(
                     pair(
@@ -240,19 +233,16 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                     ),
                     |(ident, indices)| Variable::new(ident, indices).into(),
                 ),
-                map(
-                    many1(alt((
-                        into(single_quoted),
-                        into(double_quoted),
-                        dollar_sgmt,
-                        into(brace_expansion),
-                        into(backquoted),
-                        into(lit(char('#'))),
-                        // Parse a literal until something that looks like a math operator.
-                        lit_word_sgmt("+-*/=%^,]?:"),
-                    ))),
-                    |sgmts| ArithExpansion::new(sgmts).into(),
-                ),
+                into(many1(alt((
+                    into(single_quoted),
+                    into(double_quoted),
+                    dollar_sgmt,
+                    into(brace_expansion),
+                    into(backquoted),
+                    into(lit(char('#'))),
+                    // Parse a literal until something that looks like a math operator.
+                    lit_word_sgmt("+-*/=%^,]?:"),
+                )))),
             )),
             arith_space,
         )(span)
@@ -506,34 +496,31 @@ mod tests {
     #[test]
     fn test_arith_seq() {
         // A single digit is fine.
-        assert_parse!(
-            arith_seq("0"),
-            ArithSeq::new(vec![tests::arith_number("0").into()])
-        );
+        assert_parse!(arith_seq("0"), vec![tests::arith_number("0").into()]);
         assert_parse!(
             arith_seq("!!0"),
-            ArithSeq::new(vec![ArithUnExpr::new(
+            vec![ArithUnExpr::new(
                 ArithUnExpr::new(tests::arith_number("0"), UnOp::Not),
                 UnOp::Not,
             )
-            .into()])
+            .into()]
         );
 
         // Pre and post increments and decrements.
         assert_parse!(
             arith_seq("x++ + --y"),
-            ArithSeq::new(vec![ArithBinExpr::new(
+            vec![ArithBinExpr::new(
                 ArithUnExpr::new(tests::variable("x"), UnOp::Inc),
                 ArithUnExpr::new(tests::variable("y"), UnOp::Dec),
                 BinOp::Add
             )
-            .into()])
+            .into()]
         );
 
         // Trinary conditions with weird spacing.
         assert_parse!(
             arith_seq("a?\\\nb:c?\td : e"),
-            ArithSeq::new(vec![ArithTriExpr::new(
+            vec![ArithTriExpr::new(
                 tests::variable("a"),
                 tests::variable("b"),
                 ArithTriExpr::new(
@@ -542,43 +529,35 @@ mod tests {
                     tests::variable("e")
                 ),
             )
-            .into()])
+            .into()]
         );
 
         // Groups and dollar expressions.
         assert_parse!(
             arith_seq("($x ** 2)"),
-            ArithSeq::new(vec![ArithGroup::new(ArithSeq::new(vec![
-                ArithBinExpr::new(
-                    ArithExpansion::new(vec![DollarExp::Variable(tests::variable("x")).into(),]),
-                    tests::arith_number("2"),
-                    BinOp::Pow,
-                )
-                .into(),
-            ]))
-            .into()])
+            vec![ArithTerm::Group(vec![ArithBinExpr::new(
+                ArithTerm::Expansion(vec![DollarExp::Variable(tests::variable("x")).into()]),
+                tests::arith_number("2"),
+                BinOp::Pow,
+            )
+            .into()])]
         );
 
         // A list of assignments.
         assert_parse!(
             arith_seq("x+=1, y<<=2"),
-            ArithSeq::new(vec![
+            vec![
                 ArithBinExpr::new(tests::variable("x"), tests::arith_number("1"), BinOp::AddEq)
                     .into(),
                 ArithBinExpr::new(tests::variable("y"), tests::arith_number("2"), BinOp::ShlEq)
                     .into()
-            ])
+            ]
         );
 
         // Lint for using a test operator inside math stuff.
         assert_parse!(
             arith_seq("x -lt"),
-            ArithSeq::new(vec![ArithBinExpr::new(
-                tests::variable("x"),
-                tests::variable("lt"),
-                BinOp::Sub
-            )
-            .into()]),
+            vec![ArithBinExpr::new(tests::variable("x"), tests::variable("lt"), BinOp::Sub).into()],
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
     }
