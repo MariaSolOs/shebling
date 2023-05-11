@@ -1,4 +1,4 @@
-use shebling_codegen::{FromStructs, New};
+use shebling_codegen::{FromVariants, New};
 
 // TODO: Document each type.
 // TODO: Simplify.
@@ -156,7 +156,7 @@ pub(crate) struct UnExpr<O, E> {
 // endregion
 
 // region: Arithmetic expressions.
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum ArithTerm {
     BinExpr(ArithBinExpr),
     Expansion(ArithExpansion),
@@ -191,7 +191,7 @@ pub(crate) type ArithUnExpr = UnExpr<UnOp, ArithTerm>;
 // endregion
 
 // region: Shell expansions.
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum DollarExp {
     Arith(ArithSeq),
     CmdExpansion(DollarCmdExpansion),
@@ -244,7 +244,7 @@ pub(crate) struct DoubleQuoted {
     sgmts: Vec<DoubleQuotedSgmt>,
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum DoubleQuotedSgmt {
     BackQuoted(BackQuoted),
     Lit(Lit),
@@ -309,7 +309,7 @@ impl Word {
     }
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum WordSgmt {
     BackQuoted(BackQuoted),
     BraceExpansion(BraceExpansion),
@@ -366,7 +366,7 @@ pub(crate) struct Assign {
     op: BinOp,
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum Value {
     Array(Array),
     Empty,
@@ -424,7 +424,7 @@ impl PartialEq<UnOp> for CondOp {
     }
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum CondExpr {
     BinExpr(CondBinExpr),
     Group(CondGroup),
@@ -464,7 +464,7 @@ tokenizable! {
     }
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum FileDesc {
     Number,
     StdOutErr,
@@ -480,7 +480,7 @@ pub(crate) struct Redir {
 // endregion
 
 // region: Commands.
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum Cmd {
     Compound(CompoundCmd),
     Cond(CondCmd),
@@ -514,13 +514,13 @@ pub(crate) struct SimpleCmd {
     suffix: Vec<CmdSuffixSgmt>,
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum CmdPrefixSgmt {
     Assign(Assign),
     Redir(Redir),
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum CmdSuffixSgmt {
     ArithSeq(ArithSeq),
     Assign(Assign),
@@ -542,7 +542,7 @@ tokenizable! {
     }
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum Term {
     List(List),
     Pipeline(Pipeline),
@@ -605,7 +605,7 @@ tokenizable! {
     }
 }
 
-#[derive(Debug, FromStructs, PartialEq)]
+#[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum ForLoop {
     Arith(ArithForLoop),
     Listed(InListed),

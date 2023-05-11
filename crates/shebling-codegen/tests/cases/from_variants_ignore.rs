@@ -1,10 +1,10 @@
-use shebling_codegen::FromStructs;
+use shebling_codegen::FromVariants;
 
 // Ignore variants if they have a #[from_structs(ignore)] attribute.
-#[derive(FromStructs)]
+#[derive(FromVariants)]
 enum Foo {
     Bar(String),
-    #[from_structs(ignore)]
+    #[from(ignore)]
     Baz(String),
 }
 

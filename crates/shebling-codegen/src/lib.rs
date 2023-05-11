@@ -155,18 +155,18 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
     }
 }
 
-/// Creates a `From<..>` implementation for each struct variant of the attached
+/// Creates a `From<..>` implementation for selected variants of the attached
 /// enum.
 ///
 /// # Example
 /// ```
-/// use shebling_codegen::FromStructs;
+/// use shebling_codegen::FromVariants;
 ///
 /// struct Bar {
 ///     bar: u32,
 /// }
 ///
-/// #[derive(FromStructs)]
+/// #[derive(FromVariants)]
 /// enum Foo {
 ///     Bar(Bar),
 /// }
@@ -174,8 +174,8 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
 /// let foo = Foo::from(Bar { bar: 17 });
 /// assert!(matches!(foo, Foo::Bar(_)));
 /// ```
-#[proc_macro_derive(FromStructs, attributes(from_structs))]
-pub fn from_structs(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(FromVariants, attributes(from))]
+pub fn from_variants_derive(input: TokenStream) -> TokenStream {
     // Parse the input enum.
     let input @ ItemEnum {
         ident,
@@ -193,14 +193,14 @@ pub fn from_structs(input: TokenStream) -> TokenStream {
     // For each enum variant with an inner struct, generate the From<..> implementation.
     let mut from_impls = Vec::with_capacity(variants.len());
     for variant in variants {
-        // Ignore the arm if it has a #[from_structs(ignore)] attribute.
-        if let Some(attr) = match helper_attr("from_structs", &variant.attrs) {
+        // Ignore the arm if it has a #[from(ignore)] attribute.
+        if let Some(attr) = match helper_attr("from", &variant.attrs) {
             Ok(attr) => attr,
             Err(err) => return err,
         } {
             if let Err(err) = attr.parse_nested_meta(|meta| match meta.path.get_ident() {
                 Some(ident) if ident == "ignore" => Ok(()),
-                _ => Err(meta.error(format!("invalid #[from_structs(...)] content"))),
+                _ => Err(meta.error(format!("invalid #[from(...)] content"))),
             }) {
                 return err.into_compile_error().into();
             } else {
@@ -216,7 +216,7 @@ pub fn from_structs(input: TokenStream) -> TokenStream {
             let struct_ty = &unnamed[0].ty;
             let variant_ident = &variant.ident;
             from_impls.push(quote! {
-                impl #impl_generics From<#struct_ty> for #ident #ty_generics #where_clause {
+                impl #impl_generics ::std::convert::From<#struct_ty> for #ident #ty_generics #where_clause {
                     fn from(inner: #struct_ty) -> Self {
                         #ident::#variant_ident(inner)
                     }

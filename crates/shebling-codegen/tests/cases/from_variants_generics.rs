@@ -1,11 +1,11 @@
-use shebling_codegen::FromStructs;
+use shebling_codegen::FromVariants;
 
 struct Bar<T> {
     bar: T,
 }
 
 // The attribute should handle generics just fine.
-#[derive(FromStructs)]
+#[derive(FromVariants)]
 enum Foo<T> {
     Bar(Bar<T>),
 }

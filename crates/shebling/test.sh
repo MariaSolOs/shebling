@@ -1,6 +1,3 @@
-#!/bin/bash
-
-y=0
-x=$((1 + $y))
-
-echo "$x"
+function foo() {
+    echo $"foo"'foo'$((1+1));
+}

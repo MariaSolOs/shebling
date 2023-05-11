@@ -1,4 +1,4 @@
-use shebling_codegen::FromStructs;
+use shebling_codegen::FromVariants;
 
 // Make sure that variants that are not structs are ignored
 // without errors.
@@ -7,7 +7,7 @@ struct Bar {
     bar: bool,
 }
 
-#[derive(FromStructs)]
+#[derive(FromVariants)]
 enum Foo {
     Bar(Bar),
     Baz,
