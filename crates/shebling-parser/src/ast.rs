@@ -1,6 +1,7 @@
-use shebling_codegen::{from_structs, New};
+use shebling_codegen::{FromStructs, New};
 
 // TODO: Document each type.
+// TODO: Simplify.
 
 // region: Tokens.
 /// Trait for types that represent single tokens, such as keywords
@@ -46,6 +47,7 @@ macro_rules! tokenizable {
 
 // region: Binary and unary expressions.
 tokenizable! {
+    /// A binary operator.
     enum BinOp {
         /// Addition operator.
         Add("+"),
@@ -114,6 +116,7 @@ tokenizable! {
     }
 }
 
+/// A binary expression (e.g. `$x + 1`).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct BinExpr<O, L, R = L> {
     #[new(into)]
@@ -125,6 +128,7 @@ pub(crate) struct BinExpr<O, L, R = L> {
 }
 
 tokenizable! {
+    /// A unary operator.
     enum UnOp {
         /// Bitwise negation operator.
         BitNeg("~"),
@@ -141,6 +145,7 @@ tokenizable! {
     }
 }
 
+/// A unary expression (e.g. `++x`).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct UnExpr<O, E> {
     #[new(into)]
@@ -151,8 +156,7 @@ pub(crate) struct UnExpr<O, E> {
 // endregion
 
 // region: Arithmetic expressions.
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum ArithTerm {
     BinExpr(ArithBinExpr),
     Expansion(ArithExpansion),
@@ -193,8 +197,7 @@ pub(crate) type ArithUnExpr = UnExpr<UnOp, ArithTerm>;
 // endregion
 
 // region: Shell expansions.
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum DollarExp {
     Arith(ArithSeq),
     CmdExpansion(DollarCmdExpansion),
@@ -247,8 +250,7 @@ pub(crate) struct DoubleQuoted {
     sgmts: Vec<DoubleQuotedSgmt>,
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum DoubleQuotedSgmt {
     BackQuoted(BackQuoted),
     Lit(Lit),
@@ -313,8 +315,7 @@ impl Word {
     }
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum WordSgmt {
     BackQuoted(BackQuoted),
     BraceExpansion(BraceExpansion),
@@ -371,8 +372,7 @@ pub(crate) struct Assign {
     op: BinOp,
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum Value {
     Array(Array),
     Empty,
@@ -430,8 +430,7 @@ impl PartialEq<UnOp> for CondOp {
     }
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum CondExpr {
     BinExpr(CondBinExpr),
     Group(CondGroup),
@@ -471,8 +470,7 @@ tokenizable! {
     }
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum FileDesc {
     Number,
     StdOutErr,
@@ -488,8 +486,7 @@ pub(crate) struct Redir {
 // endregion
 
 // region: Commands.
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum Cmd {
     Compound(CompoundCmd),
     Cond(CondCmd),
@@ -523,15 +520,13 @@ pub(crate) struct SimpleCmd {
     suffix: Vec<CmdSuffixSgmt>,
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum CmdPrefixSgmt {
     Assign(Assign),
     Redir(Redir),
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum CmdSuffixSgmt {
     ArithSeq(ArithSeq),
     Assign(Assign),
@@ -553,8 +548,7 @@ tokenizable! {
     }
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum Term {
     List(List),
     Pipeline(Pipeline),
@@ -617,8 +611,7 @@ tokenizable! {
     }
 }
 
-#[from_structs]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, FromStructs, PartialEq)]
 pub(crate) enum ForLoop {
     Arith(ArithForLoop),
     Listed(InListed),

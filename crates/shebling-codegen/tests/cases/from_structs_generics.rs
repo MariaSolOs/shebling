@@ -1,19 +1,18 @@
-use shebling_codegen::from_structs;
+use shebling_codegen::FromStructs;
 
-// The attribute should handle generics just fine.
-
-struct Foo<T> {
-    foo: T,
+struct Bar<T> {
+    bar: T,
 }
 
-#[from_structs]
-enum Bar<T> {
-    Foo(Foo<T>),
+// The attribute should handle generics just fine.
+#[derive(FromStructs)]
+enum Foo<T> {
+    Bar(Bar<T>),
 }
 
 fn main() {
-    let foo = Foo { foo: 17 };
-    let bar = Bar::from(foo);
+    let bar = Bar { bar: 17 };
+    let foo = Foo::from(bar);
 
-    assert!(matches!(bar, Bar::Foo(_)));
+    assert!(matches!(foo, Foo::Bar(_)));
 }

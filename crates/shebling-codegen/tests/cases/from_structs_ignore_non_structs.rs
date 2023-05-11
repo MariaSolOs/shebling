@@ -1,23 +1,23 @@
-use shebling_codegen::from_structs;
+use shebling_codegen::FromStructs;
 
 // Make sure that variants that are not structs are ignored
 // without errors.
 
-struct Foo {
-    foo: bool,
+struct Bar {
+    bar: bool,
 }
 
-#[from_structs]
-enum Bar {
-    Foo(Foo),
+#[derive(FromStructs)]
+enum Foo {
+    Bar(Bar),
     Baz,
     Qux { qux: u32 },
 }
 
 fn main() {
-    let foo = Foo { foo: true };
-    let bar: Bar = foo.into();
-    let _other_bar = Bar::Qux { qux: 17 };
+    let bar = Bar { bar: true };
+    let foo: Foo = bar.into();
+    let _other_foo = Foo::Qux { qux: 17 };
 
-    assert!(matches!(bar, Bar::Foo(_)));
+    assert!(matches!(foo, Foo::Bar(_)));
 }

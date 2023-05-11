@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    parse_macro_input, spanned::Spanned, AngleBracketedGenericArguments, Error, Fields,
+    parse_macro_input, spanned::Spanned, AngleBracketedGenericArguments, Attribute, Error, Fields,
     FieldsNamed, FieldsUnnamed, GenericArgument, ItemEnum, ItemStruct, PathArguments, Type,
 };
 
@@ -42,16 +42,10 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
 
         for field in named {
             // Get the #[new] attribute if present.
-            let mut new_attrs = field
-                .attrs
-                .into_iter()
-                .filter(|attr| attr.path().is_ident("new"));
-
-            // Check that there is at most one #[new] attribute.
-            let new_attr = new_attrs.next();
-            if let Some(attr) = new_attrs.next() {
-                return error(attr.span(), "duplicate #[new(...)] attribute");
-            }
+            let new_attr = match helper_attr("new", &field.attrs) {
+                Ok(attr) => attr,
+                Err(err) => return err,
+            };
 
             // Check if we should use Into<..> or the type's default for the
             // constructor parameter.
@@ -166,22 +160,22 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
 ///
 /// # Example
 /// ```
-/// use shebling_codegen::from_structs;
+/// use shebling_codegen::FromStructs;
 ///
-/// struct Foo {
-///     foo: u32,
+/// struct Bar {
+///     bar: u32,
 /// }
 ///
-/// #[from_structs]
-/// enum Bar {
-///     Foo(Foo),
+/// #[derive(FromStructs)]
+/// enum Foo {
+///     Bar(Bar),
 /// }
 ///
-/// let bar = Bar::from(Foo { foo: 17 });
-/// assert!(matches!(bar, Bar::Foo(_)));
+/// let foo = Foo::from(Bar { bar: 17 });
+/// assert!(matches!(foo, Foo::Bar(_)));
 /// ```
-#[proc_macro_attribute]
-pub fn from_structs(_args: TokenStream, input: TokenStream) -> TokenStream {
+#[proc_macro_derive(FromStructs, attributes(from_structs))]
+pub fn from_structs(input: TokenStream) -> TokenStream {
     // Parse the input enum.
     let input @ ItemEnum {
         ident,
@@ -199,6 +193,21 @@ pub fn from_structs(_args: TokenStream, input: TokenStream) -> TokenStream {
     // For each enum variant with an inner struct, generate the From<..> implementation.
     let mut from_impls = Vec::with_capacity(variants.len());
     for variant in variants {
+        // Ignore the arm if it has a #[from_structs(ignore)] attribute.
+        if let Some(attr) = match helper_attr("from_structs", &variant.attrs) {
+            Ok(attr) => attr,
+            Err(err) => return err,
+        } {
+            if let Err(err) = attr.parse_nested_meta(|meta| match meta.path.get_ident() {
+                Some(ident) if ident == "ignore" => Ok(()),
+                _ => Err(meta.error(format!("invalid #[from_structs(...)] content"))),
+            }) {
+                return err.into_compile_error().into();
+            } else {
+                continue;
+            }
+        }
+
         if let Fields::Unnamed(FieldsUnnamed { unnamed, .. }) = &variant.fields {
             if unnamed.len() != 1 {
                 return error(unnamed.span(), "expected a single struct identifier");
@@ -216,14 +225,29 @@ pub fn from_structs(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
-    let output = quote! {
-        #input
-        #(#from_impls)*
-    };
-
+    let output = quote!(#(#from_impls)*);
     output.into()
 }
 
-fn error(span: Span, message: &str) -> TokenStream {
-    Error::new(span, message).to_compile_error().into()
+fn helper_attr<'a>(
+    ident: &str,
+    attrs: &'a [Attribute],
+) -> Result<Option<&'a Attribute>, TokenStream> {
+    // Get the helper attributes.
+    let mut attrs = attrs.iter().filter(|attr| attr.path().is_ident(ident));
+
+    // Check that there is at most one.
+    let attr = attrs.next();
+    if let Some(attr) = attrs.next() {
+        return Err(error(
+            attr.span(),
+            format!("duplicate #[{ident}(...)] attribute"),
+        ));
+    } else {
+        Ok(attr)
+    }
+}
+
+fn error(span: Span, message: impl AsRef<str>) -> TokenStream {
+    Error::new(span, message.as_ref()).to_compile_error().into()
 }

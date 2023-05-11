@@ -11,7 +11,8 @@ fn test() {
     t.compile_fail("tests/cases/new_invalid_attr.rs");
     t.pass("tests/cases/new_param_ty.rs");
 
-    // #[from_structs] tests
+    // #[derive(FromStructs)] tests
     t.pass("tests/cases/from_structs_generics.rs");
     t.pass("tests/cases/from_structs_ignore_non_structs.rs");
+    t.pass("tests/cases/from_structs_ignore_variant.rs");
 }
