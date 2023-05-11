@@ -642,7 +642,9 @@ pub(crate) struct InListed {
 
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Function {
+    #[new(into)]
     name: String,
+    #[new(into)]
     body: Term,
 }
 

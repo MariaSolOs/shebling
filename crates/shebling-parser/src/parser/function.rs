@@ -25,20 +25,22 @@ pub(super) fn bats_test(span: Span) -> ParseResult<BatsTest> {
 
 pub(super) fn function(span: Span) -> ParseResult<Function> {
     fn parens(span: Span) -> ParseResult<()> {
-        swallow(separated_pair(
-            char('('),
-            trivia,
-            alt((char(')'), |span| {
-                // No need for parameter lists.
-                let (span, (_, range)) = ranged(is_not("\n){"))(span)?;
-                span.extra.diag(
-                    ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
-                        .label("parameter list", range)
-                        .help("Just use '()' and refer to the parameters as $1, $2..."),
-                );
+        swallow(pair(
+            terminated(char('('), trivia),
+            terminated(
+                alt((char(')'), |span| {
+                    // No need for parameter lists.
+                    let (span, (_, range)) = ranged(is_not("\n){"))(span)?;
+                    span.extra.diag(
+                        ParseDiagnostic::builder(ParseDiagnosticKind::NotShellCode)
+                            .label("parameter list", range)
+                            .help("Just use '()' and refer to the parameters as $1, $2..."),
+                    );
 
-                char(')')(span)
-            })),
+                    char(')')(span)
+                })),
+                trivia,
+            ),
         ))(span)
     }
 
@@ -84,7 +86,10 @@ pub(super) fn function(span: Span) -> ParseResult<Function> {
 
     map(
         separated_pair(
-            alt((with_keyword, without_keyword)),
+            context(
+                "invalid function signature!",
+                alt((with_keyword, without_keyword)),
+            ),
             pair(
                 multi_trivia,
                 peek(context(
@@ -126,6 +131,47 @@ mod tests {
 
     #[test]
     fn test_function() {
-        // TODO
+        // Function identifiers are more flexible than regular ones.
+        assert_parse!(
+            function(":() { foo; }"),
+            Function::new(":", tests::pipeline("foo"))
+        );
+        assert_parse!(
+            function("function []!() { foo; }"),
+            Function::new("[]!", tests::pipeline("foo"))
+        );
+
+        // The body can be a subshell.
+        assert_parse!(
+            function("foo() (bar)"),
+            Function::new("foo", tests::pipeline("bar"))
+        );
+
+        // No need for parameter lists.
+        assert_parse!(
+            function("foo(x, y) { bar; }"),
+            Function::new("foo", tests::pipeline("bar")),
+            [((1, 5), (1, 9), ParseDiagnosticKind::NotShellCode)]
+        );
+
+        // When using the keyword, there needs to be space before the body
+        // if there are no parens.
+        assert_parse!(
+            function("function foo{ bar; }"),
+            Function::new("foo", tests::pipeline("bar")),
+            [((1, 13), ParseDiagnosticKind::MissingSpace)]
+        );
+
+        // Missing the body's opening delimiter.
+        assert_parse!(function("function foo\n  bar;") => Err(
+            (2, 3),
+            Notes: [((2, 3), "expected a '{' or '('")]
+        ));
+
+        // Only horizontal whitespace is allowed after 'function'.
+        assert_parse!(function("function\nfoo() { bar; }") => Err(
+            (1, 9),
+            Notes: [((1, 1), "invalid function signature")]
+        ));
     }
 }
