@@ -559,7 +559,7 @@ pub(crate) type List = BinExpr<ControlOp, Term>;
 // region: Command constructs.
 #[derive(Debug, PartialEq)]
 pub(crate) enum Construct {
-    BatsTest(BatsTest),
+    BatsTest(Function),
     BraceGroup(Term),
     Case(CaseCmd),
     ForLoop(ForLoop),
@@ -569,14 +569,6 @@ pub(crate) enum Construct {
     Subshell(Term),
     Until(CondBlock),
     While(CondBlock),
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct BatsTest {
-    #[new(into)]
-    name: String,
-    #[new(into)]
-    body: Term,
 }
 
 #[derive(Debug, New, PartialEq)]

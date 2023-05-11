@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn bats_test(span: Span) -> ParseResult<BatsTest> {
+pub(super) fn bats_test(span: Span) -> ParseResult<Function> {
     // Read the test header.
     let (span, mut header) = preceded(
         pair(tag("@test "), trivia),
@@ -20,7 +20,7 @@ pub(super) fn bats_test(span: Span) -> ParseResult<BatsTest> {
         context("invalid test body!", brace_group),
     )(span)?;
 
-    Ok((span, BatsTest::new(header.trim_end(), body)))
+    Ok((span, Function::new(header.trim_end(), body)))
 }
 
 pub(super) fn function(span: Span) -> ParseResult<Function> {
@@ -113,15 +113,15 @@ mod tests {
         // These tests are the ones that ShellCheck uses because idek what a bats test is.
         assert_parse!(
             bats_test("@test 'can parse' {\n  true\n}"),
-            BatsTest::new("'can parse'", tests::pipeline("true"))
+            Function::new("'can parse'", tests::pipeline("true"))
         );
         assert_parse!(
             bats_test("@test random text !(@*$Y&! {\n  true\n}"),
-            BatsTest::new("random text !(@*$Y&!", tests::pipeline("true"))
+            Function::new("random text !(@*$Y&!", tests::pipeline("true"))
         );
         assert_parse!(
             bats_test("@test foo { bar { baz {\n  true\n}"),
-            BatsTest::new("foo { bar { baz", tests::pipeline("true"))
+            Function::new("foo { bar { baz", tests::pipeline("true"))
         );
         assert_parse!(bats_test("@test foo \n{\n true\n}") => Err(
             (1, 7),
