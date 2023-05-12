@@ -198,7 +198,7 @@ pub(crate) enum ArithTerm {
     Group(ArithSeq),
     TriExpr(ArithTriExpr),
     UnExpr(ArithUnExpr),
-    Variable(Variable),
+    Var(SubscriptedVar),
 }
 
 /// Shell expansion in an arithmetic expression.
@@ -234,7 +234,7 @@ pub(crate) enum DollarExp {
     DoubleQuoting(DoubleQuoted),
     ParamExpansion(ParamExpansion),
     SingleQuoting(SingleQuoted),
-    Variable(Variable),
+    Var(SubscriptedVar),
 }
 
 #[derive(Debug, New, PartialEq)]
@@ -381,23 +381,17 @@ pub(crate) struct ProcSub {
 }
 
 #[derive(Debug, New, PartialEq)]
-pub(crate) struct Variable {
+pub(crate) struct SubscriptedVar {
     #[new(into)]
     ident: String,
-    subscripts: Vec<Subscript>,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct Subscript {
     // Left unparsed for now.
-    #[new(into)]
-    content: String,
+    subscripts: Vec<String>,
 }
 
 /// A variable assignment (e.g. `foo='bar'`).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Assign {
-    variable: Variable,
+    var: SubscriptedVar,
     #[new(into)]
     value: Value,
     op: BinOp,
@@ -421,7 +415,7 @@ pub(crate) struct Array {
 /// [Array] element of the form `arr[subscript]=value`.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct KeyValue {
-    key: Vec<Subscript>,
+    key: Vec<String>,
     #[new(into)]
     value: Box<Value>,
 }
@@ -512,7 +506,7 @@ tokenizable! {
 pub(crate) enum FileDesc {
     Number,
     StdOutErr,
-    Variable(Variable),
+    Var(SubscriptedVar),
 }
 
 /// Shell redirection, used to change the files a [Cmd] reads and writes to.

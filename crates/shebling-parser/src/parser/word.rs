@@ -97,7 +97,7 @@ pub(super) fn assign(span: Span) -> ParseResult<Assign> {
 
     Ok((
         span,
-        Assign::new(Variable::new(ident, subscripts), value, op),
+        Assign::new(SubscriptedVar::new(ident, subscripts), value, op),
     ))
 }
 
@@ -237,23 +237,20 @@ fn proc_sub(span: Span) -> ParseResult<ProcSub> {
     )(span)
 }
 
-fn subscript(span: Span) -> ParseResult<Subscript> {
+fn subscript(span: Span) -> ParseResult<String> {
     delimited(
         char('['),
-        map(
-            recognize_string(context(
-                "empty subscript!",
-                many1(alt((
-                    word_sgmt_before_pattern("]"),
-                    into(lit(trivia1)),
-                    into(lit(recognize_string(is_a(&*format!(
-                        "|&;<>() '\t\n\r\u{A0}{}",
-                        DOUBLE_ESCAPABLE
-                    ))))),
-                ))),
-            )),
-            Subscript::new,
-        ),
+        recognize_string(context(
+            "empty subscript!",
+            many1(alt((
+                word_sgmt_before_pattern("]"),
+                into(lit(trivia1)),
+                into(lit(recognize_string(is_a(&*format!(
+                    "|&;<>() '\t\n\r\u{A0}{}",
+                    DOUBLE_ESCAPABLE
+                ))))),
+            ))),
+        )),
         char(']'),
     )(span)
 }
@@ -346,7 +343,7 @@ mod tests {
         assert_parse!(
             array("( [foo]=(bar) )"),
             Array::new(vec![KeyValue::new(
-                vec![Subscript::new("foo")],
+                vec!["foo".into()],
                 Array::new(vec![tests::word("bar").into()]),
             )
             .into()])
@@ -376,12 +373,12 @@ mod tests {
         // Legit assignments.
         assert_parse!(
             assign("x+=1"),
-            Assign::new(tests::variable("x"), tests::word("1"), BinOp::AddEq)
+            Assign::new(tests::var("x"), tests::word("1"), BinOp::AddEq)
         );
         assert_parse!(
             assign("arr[0]='foo'"),
             Assign::new(
-                Variable::new("arr", vec![Subscript::new("0")]),
+                SubscriptedVar::new("arr", vec!["0".into()]),
                 Word::new(vec![SingleQuoted::new("foo").into()]),
                 BinOp::Eq,
             )
@@ -389,7 +386,7 @@ mod tests {
         assert_parse!(
             assign("foo=(bar baz)"),
             Assign::new(
-                tests::variable("foo"),
+                tests::var("foo"),
                 Array::new(vec![tests::word("bar").into(), tests::word("baz").into()]),
                 BinOp::Eq,
             )
@@ -398,23 +395,23 @@ mod tests {
         // Warn about empty values if they're not ending the command.
         assert_parse!(
             assign("foo="),
-            Assign::new(tests::variable("foo"), Value::Empty, BinOp::Eq)
+            Assign::new(tests::var("foo"), Value::Empty, BinOp::Eq)
         );
         assert_parse!(
             assign("foo= bar") => "bar",
-            Assign::new(tests::variable("foo"), Value::Empty, BinOp::Eq),
+            Assign::new(tests::var("foo"), Value::Empty, BinOp::Eq),
             [((1, 5), (1, 6), ParseDiagnosticKind::SusValue)]
         );
         // ...but IFS is the exception.
         assert_parse!(
             assign("IFS= "),
-            Assign::new(tests::variable("IFS"), Value::Empty, BinOp::Eq)
+            Assign::new(tests::var("IFS"), Value::Empty, BinOp::Eq)
         );
 
         // Wrong assignment operator.
         assert_parse!(
             assign("foo==bar"),
-            Assign::new(tests::variable("foo"), tests::word("=bar"), BinOp::Eq),
+            Assign::new(tests::var("foo"), tests::word("=bar"), BinOp::Eq),
             [((1, 5), (1, 6), ParseDiagnosticKind::SusValue)]
         );
 
@@ -504,8 +501,8 @@ mod tests {
     fn test_subscript() {
         // There has to be something inside the brackets, even if it's
         // just space.
-        assert_parse!(subscript("[0]"), Subscript::new("0"));
-        assert_parse!(subscript("[ ]"), Subscript::new(" "));
+        assert_parse!(subscript("[0]"), "0");
+        assert_parse!(subscript("[ ]"), " ");
         assert_parse!(subscript("[]") => Err((1, 2), Notes: [((1, 2), "empty subscript")]));
     }
 
@@ -517,7 +514,7 @@ mod tests {
             Word::new(vec![
                 SingleQuoted::new("foo").into(),
                 Glob::new("*").into(),
-                DollarExp::Variable(tests::variable("bar")).into()
+                DollarExp::Var(tests::var("bar")).into()
             ])
         );
 

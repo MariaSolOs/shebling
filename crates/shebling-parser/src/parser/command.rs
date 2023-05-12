@@ -1832,19 +1832,15 @@ mod tests {
             for_loop("for (( i=0;\ti<5; i++ ) ); do foo; done"),
             ArithForLoop::new(
                 (
-                    vec![ArithBinExpr::new(
-                        tests::variable("i"),
-                        tests::arith_number("0"),
-                        BinOp::Eq,
-                    )
-                    .into()],
-                    vec![ArithBinExpr::new(
-                        tests::variable("i"),
-                        tests::arith_number("5"),
-                        BinOp::Lt,
-                    )
-                    .into()],
-                    vec![ArithUnExpr::new(tests::variable("i"), UnOp::Inc).into()]
+                    vec![
+                        ArithBinExpr::new(tests::var("i"), tests::arith_number("0"), BinOp::Eq,)
+                            .into()
+                    ],
+                    vec![
+                        ArithBinExpr::new(tests::var("i"), tests::arith_number("5"), BinOp::Lt,)
+                            .into()
+                    ],
+                    vec![ArithUnExpr::new(tests::var("i"), UnOp::Inc).into()]
                 ),
                 tests::pipeline("foo"),
             )
@@ -2022,7 +2018,7 @@ mod tests {
             simple_cmd("foo=bar"),
             SimpleCmd::new(
                 None,
-                vec![Assign::new(tests::variable("foo"), tests::word("bar"), BinOp::Eq).into()],
+                vec![Assign::new(tests::var("foo"), tests::word("bar"), BinOp::Eq).into()],
                 vec![],
             )
         );
@@ -2033,7 +2029,7 @@ mod tests {
             SimpleCmd::new(
                 Some(tests::word("ls")),
                 vec![
-                    Assign::new(tests::variable("foo"), tests::word("bar"), BinOp::Eq).into(),
+                    Assign::new(tests::var("foo"), tests::word("bar"), BinOp::Eq).into(),
                     Redir::new(None, RedirOp::Great, tests::word("file")).into(),
                 ],
                 vec![],
@@ -2073,12 +2069,9 @@ mod tests {
             SimpleCmd::new(
                 Some(tests::word("let")),
                 vec![],
-                vec![vec![ArithBinExpr::new(
-                    tests::variable("x"),
-                    tests::arith_number("0"),
-                    BinOp::Eq
-                )
-                .into()]
+                vec![vec![
+                    ArithBinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
+                ]
                 .into()]
             )
         );
@@ -2087,12 +2080,9 @@ mod tests {
             SimpleCmd::new(
                 Some(tests::word("let")),
                 vec![],
-                vec![vec![ArithBinExpr::new(
-                    tests::variable("x"),
-                    tests::arith_number("0"),
-                    BinOp::Eq
-                )
-                .into()]
+                vec![vec![
+                    ArithBinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
+                ]
                 .into()]
             )
         );
@@ -2156,7 +2146,7 @@ mod tests {
                 tests::pipeline("com"),
                 Pipeline::new(vec![SimpleCmd::new(
                     None,
-                    vec![Assign::new(tests::variable("q"), tests::word("foo"), BinOp::Eq).into()],
+                    vec![Assign::new(tests::var("q"), tests::word("foo"), BinOp::Eq).into()],
                     vec![],
                 )
                 .into()]),

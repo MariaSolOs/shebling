@@ -227,11 +227,11 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                         many0(delimited(
                             char('['),
                             // TODO: Parse these later based on the array being associative or not.
-                            map(recognize_string(arith_seq), Subscript::new),
+                            recognize_string(arith_seq),
                             char(']'),
                         )),
                     ),
-                    |(ident, indices)| Variable::new(ident, indices).into(),
+                    |(ident, indices)| SubscriptedVar::new(ident, indices).into(),
                 ),
                 into(many1(alt((
                     into(single_quoted),
@@ -394,7 +394,7 @@ pub(super) fn dollar_sgmt(span: Span) -> ParseResult<WordSgmt> {
     ))(span)
 }
 
-fn dollar_variable(span: Span) -> ParseResult<Variable> {
+fn dollar_variable(span: Span) -> ParseResult<SubscriptedVar> {
     fn dollar_ident(span: Span) -> ParseResult<String> {
         let (span, ((ident, range), has_bracket)) =
             pair(ranged(identifier), followed_by(char('[')))(span)?;
@@ -435,7 +435,7 @@ fn dollar_variable(span: Span) -> ParseResult<Variable> {
                 recognize_string(one_of(SPECIAL_PARAMS)),
                 dollar_ident,
             )),
-            |ident| Variable::new(ident, vec![]),
+            |ident| SubscriptedVar::new(ident, vec![]),
         ),
     )(span)
 }
@@ -510,8 +510,8 @@ mod tests {
         assert_parse!(
             arith_seq("x++ + --y"),
             vec![ArithBinExpr::new(
-                ArithUnExpr::new(tests::variable("x"), UnOp::Inc),
-                ArithUnExpr::new(tests::variable("y"), UnOp::Dec),
+                ArithUnExpr::new(tests::var("x"), UnOp::Inc),
+                ArithUnExpr::new(tests::var("y"), UnOp::Dec),
                 BinOp::Add
             )
             .into()]
@@ -521,13 +521,9 @@ mod tests {
         assert_parse!(
             arith_seq("a?\\\nb:c?\td : e"),
             vec![ArithTriExpr::new(
-                tests::variable("a"),
-                tests::variable("b"),
-                ArithTriExpr::new(
-                    tests::variable("c"),
-                    tests::variable("d"),
-                    tests::variable("e")
-                ),
+                tests::var("a"),
+                tests::var("b"),
+                ArithTriExpr::new(tests::var("c"), tests::var("d"), tests::var("e")),
             )
             .into()]
         );
@@ -536,7 +532,7 @@ mod tests {
         assert_parse!(
             arith_seq("($x ** 2)"),
             vec![ArithTerm::Group(vec![ArithBinExpr::new(
-                ArithTerm::Expansion(vec![DollarExp::Variable(tests::variable("x")).into()]),
+                ArithTerm::Expansion(vec![DollarExp::Var(tests::var("x")).into()]),
                 tests::arith_number("2"),
                 BinOp::Pow,
             )
@@ -547,17 +543,15 @@ mod tests {
         assert_parse!(
             arith_seq("x+=1, y<<=2"),
             vec![
-                ArithBinExpr::new(tests::variable("x"), tests::arith_number("1"), BinOp::AddEq)
-                    .into(),
-                ArithBinExpr::new(tests::variable("y"), tests::arith_number("2"), BinOp::ShlEq)
-                    .into()
+                ArithBinExpr::new(tests::var("x"), tests::arith_number("1"), BinOp::AddEq).into(),
+                ArithBinExpr::new(tests::var("y"), tests::arith_number("2"), BinOp::ShlEq).into()
             ]
         );
 
         // Lint for using a test operator inside math stuff.
         assert_parse!(
             arith_seq("x -lt"),
-            vec![ArithBinExpr::new(tests::variable("x"), tests::variable("lt"), BinOp::Sub).into()],
+            vec![ArithBinExpr::new(tests::var("x"), tests::var("lt"), BinOp::Sub).into()],
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
     }
@@ -572,9 +566,9 @@ mod tests {
         assert_parse!(
             brace_expansion("{$x..$y}"),
             BraceExpansion::new(vec![Word::new(vec![
-                DollarExp::from(tests::variable("x")).into(),
+                DollarExp::from(tests::var("x")).into(),
                 Lit::new("..").into(),
-                DollarExp::from(tests::variable("y")).into(),
+                DollarExp::from(tests::var("y")).into(),
             ])])
         );
 
@@ -668,17 +662,17 @@ mod tests {
     #[test]
     fn test_dollar_variable() {
         // A dollar followed by an identifier is valid.
-        assert_parse!(dollar_variable("$foo"), tests::variable("foo"));
+        assert_parse!(dollar_variable("$foo"), tests::var("foo"));
 
         // If not an identifier, it must be a special parameter.
-        assert_parse!(dollar_variable("$?"), tests::variable("?"));
+        assert_parse!(dollar_variable("$?"), tests::var("?"));
 
         // Numerical variables are fine:
-        assert_parse!(dollar_variable("$1"), tests::variable("1"));
+        assert_parse!(dollar_variable("$1"), tests::var("1"));
         // ...but if they're multi-digit we emit a diagnostic.
         assert_parse!(
             dollar_variable("$123") => "23",
-            tests::variable("1"),
+            tests::var("1"),
             [((1, 2), (1, 5), ParseDiagnosticKind::Unbraced)]
         );
 

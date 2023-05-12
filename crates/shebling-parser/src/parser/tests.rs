@@ -122,7 +122,7 @@ pub(crate) fn word(lit: &str) -> Word {
     Word::new(vec![Lit::new(lit).into()])
 }
 
-pub(crate) fn variable(ident: &str) -> Variable {
-    Variable::new(ident, vec![])
+pub(crate) fn var(ident: &str) -> SubscriptedVar {
+    SubscriptedVar::new(ident, vec![])
 }
 // endregion
