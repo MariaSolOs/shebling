@@ -175,6 +175,7 @@ pub fn new_derive(input: TokenStream) -> TokenStream {
 /// assert!(matches!(foo, Foo::Bar(_)));
 /// ```
 #[proc_macro_derive(FromVariants, attributes(from))]
+// TODO: Add an option for just considering some variants.
 pub fn from_variants_derive(input: TokenStream) -> TokenStream {
     // Parse the input enum.
     let input @ ItemEnum {
@@ -200,7 +201,7 @@ pub fn from_variants_derive(input: TokenStream) -> TokenStream {
         } {
             if let Err(err) = attr.parse_nested_meta(|meta| match meta.path.get_ident() {
                 Some(ident) if ident == "ignore" => Ok(()),
-                _ => Err(meta.error(format!("invalid #[from(...)] content"))),
+                _ => Err(meta.error("invalid #[from(...)] content")),
             }) {
                 return err.into_compile_error().into();
             } else {
@@ -241,7 +242,7 @@ fn helper_attr<'a>(
     if let Some(attr) = attrs.next() {
         return Err(error(
             attr.span(),
-            format!("duplicate #[{ident}(...)] attribute"),
+            format!("duplicate #[{}(...)] attribute", ident),
         ));
     } else {
         Ok(attr)

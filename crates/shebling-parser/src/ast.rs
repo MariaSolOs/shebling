@@ -16,33 +16,33 @@ where
 /// Utility macro for creating [Token] enums.
 macro_rules! tokenizable {
     (
-         $(#[doc = $enum_doc:expr])*
-         enum $name:ident {
-             $($(#[doc = $arm_doc:expr])* $arm:ident($token:literal),)+
-         }
+        $(#[doc = $enum_doc:expr])*
+        enum $name:ident {
+            $($(#[doc = $arm_doc:expr])* $arm:ident($token:literal),)+
+        }
      ) => {
-         $(#[doc = $enum_doc])*
-         #[derive(Clone, Copy, Debug, PartialEq)]
-         pub(crate) enum $name {
-             $(
-                 /// ```sh
-                 #[doc = $token]
-                 /// ```
-                 ///
-                 $(#[doc = $arm_doc])*
-                 $arm
-             ),+
-         }
+        $(#[doc = $enum_doc])*
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub(crate) enum $name {
+            $(
+                /// ```sh
+                #[doc = $token]
+                /// ```
+                ///
+                $(#[doc = $arm_doc])*
+                $arm
+            ),+
+        }
 
-         impl self::Token for $name {
-             fn token(&self) -> &'static str {
-                 match self {
-                     $(Self::$arm => $token),+
-                 }
-             }
-         }
-     };
- }
+        impl self::Token for $name {
+            fn token(&self) -> &'static str {
+                match self {
+                    $(Self::$arm => $token),+
+                }
+            }
+        }
+    };
+}
 // endregion
 
 // region: Binary and unary expressions.
@@ -51,66 +51,96 @@ tokenizable! {
     enum BinOp {
         /// Addition operator.
         Add("+"),
+
         /// Addition assignment operator.
         AddEq("+="),
+
         /// Logical-and operator.
         And("&&"),
+
         /// Bitwise-and operator.
         BitAnd("&"),
+
         /// Bitwise-and assignment operator.
         BitAndEq("&="),
+
         /// Bitwise-or operator.
         BitOr("|"),
+
         /// Bitwise-or assignment operator.
         BitOrEq("|="),
+
         /// Bitwise-xor operator.
         BitXor("^"),
+
         /// Bitwise-xor assignment operator.
         BitXorEq("^="),
+
         /// Division operator.
         Div("/"),
+
         /// Division assignment operator.
         DivEq("/="),
+
         /// Assignment operator. In conditional expressions, it is also
         /// used for string equality.
         Eq("="),
+
         /// Equality operator. In conditional expressions, it is also
         /// used for string equality and pattern matching.
         EqEq("=="),
+
         /// Greater-than-or-equal-to operator.
         Ge(">="),
+
         /// Greater-than operator.
         Gt(">"),
+
         /// Less-than-or-equal-to operator.
         Le("<="),
+
         /// Less-than operator.
         Lt("<"),
+
         /// Regex match operator.
         Match("=~"),
+
         /// Modulus operator.
         Mod("%"),
+
         /// Modulus assignment operator.
         ModEq("%="),
+
         /// Multiplication operator.
         Mult("*"),
+
         /// Multiplication assignment operator.
         MultEq("*="),
+
         /// Not-equal-to operator.
         Ne("!="),
+
         /// Logical-or operator.
         Or("||"),
+
         /// Exponentiation operator.
         Pow("**"),
+
         /// Left-shift operator.
         Shl("<<"),
+
         /// Left-shift assignment operator.
         ShlEq("<<="),
+
         /// Right-shift operator.
         Shr(">>"),
+
         /// Right-shift assignment operator.
         ShrEq(">>="),
+
         /// Subtraction operator.
         Sub("-"),
+
         /// Subtraction assignment operator.
         SubEq("-="),
     }
@@ -132,14 +162,19 @@ tokenizable! {
     enum UnOp {
         /// Bitwise negation operator.
         BitNeg("~"),
+
         /// Pre/post decrement operator.
         Dec("--"),
+
         /// Pre/post increment operator.
         Inc("++"),
+
         /// Unary minus operator.
         Neg("-"),
+
         /// Logical negation operator.
         Not("!"),
+
         /// Unary plus operator.
         Pos("+"),
     }
@@ -286,6 +321,7 @@ tokenizable! {
     }
 }
 
+/// Sequence of [WordSgmt]s treated as a unit by the shell.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Word {
     sgmts: Vec<WordSgmt>,
@@ -358,6 +394,7 @@ pub(crate) struct Subscript {
     content: String,
 }
 
+/// A variable assignment (e.g. `foo='bar'`).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Assign {
     variable: Variable,
@@ -366,6 +403,7 @@ pub(crate) struct Assign {
     op: BinOp,
 }
 
+/// An assignment's value.
 #[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum Value {
     Array(Array),
@@ -374,11 +412,13 @@ pub(crate) enum Value {
     Word(Word),
 }
 
+/// An array variable.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Array {
     elems: Vec<Value>,
 }
 
+/// [Array] element of the form `arr[subscript]=value`.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct KeyValue {
     key: Vec<Subscript>,
@@ -442,6 +482,7 @@ pub(crate) struct CondGroup {
     group: Box<CondExpr>,
 }
 
+/// Conditional expression enclosed in `[..]` or `[[..]]`.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Cond {
     single_bracketed: bool,
@@ -451,6 +492,7 @@ pub(crate) struct Cond {
 
 // region: Redirections.
 tokenizable! {
+    /// [Token] that performs a redirection function.
     enum RedirOp {
         Clobber(">|"),
         DGreat(">>"),
@@ -464,6 +506,8 @@ tokenizable! {
     }
 }
 
+/// File descriptor that describes the file handle manipulated
+/// by a redirection.
 #[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum FileDesc {
     Number,
@@ -471,6 +515,7 @@ pub(crate) enum FileDesc {
     Variable(Variable),
 }
 
+/// Shell redirection, used to change the files a [Cmd] reads and writes to.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Redir {
     file_desc: Option<FileDesc>,
@@ -480,6 +525,7 @@ pub(crate) struct Redir {
 // endregion
 
 // region: Commands.
+/// A sequence of words defining a shell command.
 #[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum Cmd {
     Compound(CompoundCmd),
@@ -488,6 +534,8 @@ pub(crate) enum Cmd {
     Simple(SimpleCmd),
 }
 
+/// [Cmd] defined by a particular [Keyword] followed by a shell programming
+/// language construct.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CompoundCmd {
     cmd: Construct,
@@ -507,6 +555,7 @@ pub(crate) struct Coproc {
     cmd: Box<Cmd>,
 }
 
+/// Sequence of [Word]s separated by blanks, terminated by a [ControlOp].
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct SimpleCmd {
     cmd: Option<Word>,
@@ -514,12 +563,14 @@ pub(crate) struct SimpleCmd {
     suffix: Vec<CmdSuffixSgmt>,
 }
 
+/// A [Word] that precedes the command in a [SimpleCmd].
 #[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum CmdPrefixSgmt {
     Assign(Assign),
     Redir(Redir),
 }
 
+/// A [Word] that follows the command in a [SimpleCmd].
 #[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum CmdSuffixSgmt {
     ArithSeq(ArithSeq),
@@ -530,6 +581,7 @@ pub(crate) enum CmdSuffixSgmt {
 }
 
 tokenizable! {
+    /// [Token] that performs a control function.
     enum ControlOp {
         And("&"),
         AndIf("&&"),
@@ -542,17 +594,20 @@ tokenizable! {
     }
 }
 
+/// Either a "leaf" [Pipeline], or a [BinExpr] of [Term]s.
 #[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum Term {
     List(List),
     Pipeline(Pipeline),
 }
 
+/// A sequence of [Cmd]s separated by [ControlOp]s.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Pipeline {
     cmds: Vec<Cmd>,
 }
 
+/// A sequence of [Term]s separated by [ControlOp]s.
 pub(crate) type List = BinExpr<ControlOp, Term>;
 // endregion
 
@@ -571,12 +626,14 @@ pub(crate) enum Construct {
     While(CondBlock),
 }
 
+/// Conditional command construct beginning with [Keyword::Case].
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CaseCmd {
     word: Word,
     clauses: Vec<CaseClause>,
 }
 
+/// Clause in a [CaseCmd].
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CaseClause {
     pattern: Vec<Word>,
@@ -585,24 +642,28 @@ pub(crate) struct CaseClause {
 }
 
 tokenizable! {
-    /// Terminators of a `case` clause.
+    /// Terminators of a [CaseClause].
     enum ClauseSep {
         /// No subsequent matches are attempted after the first pattern match.
         Break(";;"),
+
         /// Test the patterns in the next clause, if any, and execute any
         /// associated command-list on a successful match.
         Continue(";;&"),
+
         /// Execute the command-list associated with the next clause, if any.
         Fallthrough(";&"),
     }
 }
 
+/// Looping command construct beginning with [Keyword::For].
 #[derive(Debug, FromVariants, PartialEq)]
 pub(crate) enum ForLoop {
     Arith(ArithForLoop),
     Listed(InListed),
 }
 
+/// Arithmetic, `C`-style [ForLoop].
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct ArithForLoop {
     header: (ArithSeq, ArithSeq, ArithSeq),
@@ -610,6 +671,7 @@ pub(crate) struct ArithForLoop {
     body: Term,
 }
 
+/// Group of commands with a `name in lists` header.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct InListed {
     #[new(into)]
@@ -619,6 +681,7 @@ pub(crate) struct InListed {
     body: Term,
 }
 
+/// Group of commands that can be later executed by its name.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Function {
     #[new(into)]
@@ -627,6 +690,7 @@ pub(crate) struct Function {
     body: Term,
 }
 
+/// Conditional command construct beginning with [Keyword::If].
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct IfCmd {
     if_branch: CondBlock,
@@ -634,6 +698,7 @@ pub(crate) struct IfCmd {
     else_term: Option<Term>,
 }
 
+/// Conditional block of commands that is executed when its condition is met.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CondBlock {
     #[new(into)]
