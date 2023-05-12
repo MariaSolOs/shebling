@@ -817,9 +817,9 @@ fn cond_block<'a>(keyword: Keyword) -> impl FnMut(Span<'a>) -> ParseResult<CondB
     )
 }
 
-fn cond_cmd(span: Span) -> ParseResult<CondCmd> {
+fn cond_cmd(span: Span) -> ParseResult<CompoundCmd> {
     // Read the condition and suffix redirections.
-    let (span, (cond, redirs)) = pair(cond, many0(redir))(span)?;
+    let (span, (cond, redirs)) = pair(into(cond), many0(redir))(span)?;
 
     // || or && should be used between test conditions.
     let (span, cond_op) = opt(peek(ranged(consumed(alt((
@@ -850,7 +850,7 @@ fn cond_cmd(span: Span) -> ParseResult<CondCmd> {
         }
     }
 
-    Ok((span, CondCmd::new(cond, redirs)))
+    Ok((span, CompoundCmd::new(cond, redirs)))
 }
 
 fn coproc(span: Span) -> ParseResult<Coproc> {
@@ -1714,12 +1714,15 @@ mod tests {
         // Valid condition commands.
         assert_parse!(
             cond_cmd("[[ foo ]]"),
-            CondCmd::new(Cond::new(false, Some(tests::word("foo").into())), vec![])
+            CompoundCmd::new(
+                Cond::new(false, Some(tests::word("foo").into())).into(),
+                vec![]
+            )
         );
         assert_parse!(
             cond_cmd("[ foo ] > bar"),
-            CondCmd::new(
-                Cond::new(true, Some(tests::word("foo").into())),
+            CompoundCmd::new(
+                Cond::new(true, Some(tests::word("foo").into())).into(),
                 vec![Redir::new(None, RedirOp::Great, tests::word("bar"))]
             )
         );
@@ -1727,15 +1730,15 @@ mod tests {
         // Wrong operator between conditions.
         assert_parse!(
             cond_cmd("[ foo ] -a [ bar ]") => "-a [ bar ]",
-            CondCmd::new(Cond::new(true, Some(tests::word("foo").into())), vec![]),
+            CompoundCmd::new(Cond::new(true, Some(tests::word("foo").into())).into(), vec![]),
             [((1, 9), (1, 11), ParseDiagnosticKind::BadOperator)]
         );
 
         // Missing the operator between conditions.
         assert_parse!(
             cond_cmd("[ foo ] [ bar ]") => "[ bar ]",
-            CondCmd::new(
-                Cond::new(true, Some(tests::word("foo").into())),
+            CompoundCmd::new(
+                Cond::new(true, Some(tests::word("foo").into())).into(),
                 vec![],
             ),
             [((1, 9), (1, 10), ParseDiagnosticKind::SusToken)]

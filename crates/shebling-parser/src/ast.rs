@@ -527,7 +527,6 @@ pub(crate) struct Redir {
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum Cmd {
     Compound(CompoundCmd),
-    Cond(CondCmd),
     Coproc(Coproc),
     Simple(SimpleCmd),
 }
@@ -537,12 +536,6 @@ pub(crate) enum Cmd {
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CompoundCmd {
     cmd: Construct,
-    redirs: Vec<Redir>,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct CondCmd {
-    cond: Cond,
     redirs: Vec<Redir>,
 }
 
@@ -614,26 +607,19 @@ pub(crate) type List = BinExpr<ControlOp, Term>;
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum Construct {
     BatsTest(Function),
-
     BraceGroup(Term),
-
     #[from]
     Case(CaseCmd),
-
+    #[from]
+    Cond(Cond),
     #[from]
     ForLoop(ForLoop),
-
     Function(Function),
-
     #[from]
     If(IfCmd),
-
     Select(InListed),
-
     Subshell(Term),
-
     Until(CondBlock),
-
     While(CondBlock),
 }
 
