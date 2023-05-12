@@ -1,4 +1,5 @@
-use shebling_codegen::{FromVariants, New};
+use derive_more::From;
+use shebling_codegen::New;
 
 // TODO: Document each type.
 // TODO: Simplify.
@@ -191,7 +192,7 @@ pub(crate) struct UnExpr<O, E> {
 // endregion
 
 // region: Arithmetic expressions.
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum ArithTerm {
     /// Binary expression (e.g. `$x + 1`).
     BinExpr(BinExpr<BinOp, ArithTerm>),
@@ -229,7 +230,7 @@ pub(crate) struct ArithTriExpr {
 // endregion
 
 // region: Shell expansions.
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum DollarExp {
     Arith(ArithSeq),
     CmdExpansion(DollarCmdExpansion),
@@ -282,7 +283,7 @@ pub(crate) struct DoubleQuoted {
     sgmts: Vec<DoubleQuotedSgmt>,
 }
 
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum DoubleQuotedSgmt {
     BackQuoted(BackQuoted),
     Lit(Lit),
@@ -348,7 +349,7 @@ impl Word {
     }
 }
 
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum WordSgmt {
     BackQuoted(BackQuoted),
     BraceExpansion(BraceExpansion),
@@ -401,7 +402,7 @@ pub(crate) struct Assign {
 }
 
 /// An assignment's value.
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum Value {
     Array(Array),
     Empty,
@@ -461,7 +462,7 @@ impl PartialEq<UnOp> for CondOp {
     }
 }
 
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum CondExpr {
     BinExpr(CondBinExpr),
     Group(CondGroup),
@@ -505,7 +506,7 @@ tokenizable! {
 
 /// File descriptor that describes the file handle manipulated
 /// by a redirection.
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum FileDesc {
     Number,
     StdOutErr,
@@ -523,7 +524,7 @@ pub(crate) struct Redir {
 
 // region: Commands.
 /// A sequence of words defining a shell command.
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum Cmd {
     Compound(CompoundCmd),
     Cond(CondCmd),
@@ -561,14 +562,14 @@ pub(crate) struct SimpleCmd {
 }
 
 /// A [Word] that precedes the command in a [SimpleCmd].
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum CmdPrefixSgmt {
     Assign(Assign),
     Redir(Redir),
 }
 
 /// A [Word] that follows the command in a [SimpleCmd].
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum CmdSuffixSgmt {
     ArithSeq(ArithSeq),
     Assign(Assign),
@@ -592,7 +593,7 @@ tokenizable! {
 }
 
 /// Either a "leaf" [Pipeline], or a [BinExpr] of [Term]s.
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum Term {
     List(List),
     Pipeline(Pipeline),
@@ -609,17 +610,30 @@ pub(crate) type List = BinExpr<ControlOp, Term>;
 // endregion
 
 // region: Command constructs.
-#[derive(Debug, PartialEq)]
+/// A shell programming language construct, which form the body of a [CompoundCmd].
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum Construct {
     BatsTest(Function),
+
     BraceGroup(Term),
+
+    #[from]
     Case(CaseCmd),
+
+    #[from]
     ForLoop(ForLoop),
+
     Function(Function),
+
+    #[from]
     If(IfCmd),
+
     Select(InListed),
+
     Subshell(Term),
+
     Until(CondBlock),
+
     While(CondBlock),
 }
 
@@ -654,7 +668,7 @@ tokenizable! {
 }
 
 /// Looping command construct beginning with [Keyword::For].
-#[derive(Debug, FromVariants, PartialEq)]
+#[derive(Debug, From, PartialEq)]
 pub(crate) enum ForLoop {
     Arith(ArithForLoop),
     Listed(InListed),
