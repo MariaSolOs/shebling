@@ -1833,14 +1833,12 @@ mod tests {
             ArithForLoop::new(
                 (
                     vec![
-                        ArithBinExpr::new(tests::var("i"), tests::arith_number("0"), BinOp::Eq,)
-                            .into()
+                        BinExpr::new(tests::var("i"), tests::arith_number("0"), BinOp::Eq,).into()
                     ],
                     vec![
-                        ArithBinExpr::new(tests::var("i"), tests::arith_number("5"), BinOp::Lt,)
-                            .into()
+                        BinExpr::new(tests::var("i"), tests::arith_number("5"), BinOp::Lt,).into()
                     ],
-                    vec![ArithUnExpr::new(tests::var("i"), UnOp::Inc).into()]
+                    vec![UnExpr::new(tests::var("i"), UnOp::Inc).into()]
                 ),
                 tests::pipeline("foo"),
             )
@@ -2070,7 +2068,7 @@ mod tests {
                 Some(tests::word("let")),
                 vec![],
                 vec![vec![
-                    ArithBinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
+                    BinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
                 ]
                 .into()]
             )
@@ -2081,7 +2079,7 @@ mod tests {
                 Some(tests::word("let")),
                 vec![],
                 vec![vec![
-                    ArithBinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
+                    BinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
                 ]
                 .into()]
             )

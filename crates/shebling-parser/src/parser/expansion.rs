@@ -95,9 +95,9 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                 // the assignments).
                 tail.reverse();
                 if let Some((op, term)) = tail.into_iter().reduce(|(op, right), (next_op, left)| {
-                    (next_op, ArithBinExpr::new(left, right, op).into())
+                    (next_op, BinExpr::new(left, right, op).into())
                 }) {
-                    ArithBinExpr::new(head, term, op).into()
+                    BinExpr::new(head, term, op).into()
                 } else {
                     head
                 }
@@ -126,9 +126,8 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
         map(
             pair(term, many0(separated_pair(op, arith_space, term))),
             |(head, tail)| {
-                tail.into_iter().fold(head, |acc, (op, term)| {
-                    ArithBinExpr::new(acc, term, op).into()
-                })
+                tail.into_iter()
+                    .fold(head, |acc, (op, term)| BinExpr::new(acc, term, op).into())
             },
         )
     }
@@ -153,21 +152,21 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                     terminated(term, arith_space),
                     terminated(alt((token(UnOp::Inc), token(UnOp::Dec))), arith_space),
                 ),
-                |(expr, op)| ArithUnExpr::new(expr, op).into(),
+                |(expr, op)| UnExpr::new(expr, op).into(),
             ),
             // Doesn't have a prefix or postfix increment.
             terminated(term, arith_space),
             // Prefix incremented (e.g. ++x).
             map(
                 separated_pair(alt((token(UnOp::Inc), token(UnOp::Dec))), arith_space, term),
-                |(op, expr)| ArithUnExpr::new(expr, op).into(),
+                |(op, expr)| UnExpr::new(expr, op).into(),
             ),
         ))(span)
     }
 
     fn maybe_negated(span: Span) -> ParseResult<ArithTerm> {
         alt((
-            into(negated),
+            negated,
             // Signed term (e.g. +x, -x).
             map(
                 separated_pair(
@@ -179,7 +178,7 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                     arith_space,
                     maybe_incremented_term,
                 ),
-                |(op, expr)| ArithUnExpr::new(expr, op).into(),
+                |(op, expr)| UnExpr::new(expr, op).into(),
             ),
             maybe_incremented_term,
         ))(span)
@@ -189,14 +188,14 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
         chained(exponential, bin_op!((BinOp::Mult, BinOp::Div, BinOp::Mod)))(span)
     }
 
-    fn negated(span: Span) -> ParseResult<ArithUnExpr> {
+    fn negated(span: Span) -> ParseResult<ArithTerm> {
         map(
             separated_pair(
                 alt((token(UnOp::Not), token(UnOp::BitNeg))),
                 arith_space,
                 maybe_negated,
             ),
-            |(op, expr)| ArithUnExpr::new(expr, op),
+            |(op, expr)| UnExpr::new(expr, op).into(),
         )(span)
     }
 
@@ -499,19 +498,15 @@ mod tests {
         assert_parse!(arith_seq("0"), vec![tests::arith_number("0").into()]);
         assert_parse!(
             arith_seq("!!0"),
-            vec![ArithUnExpr::new(
-                ArithUnExpr::new(tests::arith_number("0"), UnOp::Not),
-                UnOp::Not,
-            )
-            .into()]
+            vec![UnExpr::new(UnExpr::new(tests::arith_number("0"), UnOp::Not), UnOp::Not,).into()]
         );
 
         // Pre and post increments and decrements.
         assert_parse!(
             arith_seq("x++ + --y"),
-            vec![ArithBinExpr::new(
-                ArithUnExpr::new(tests::var("x"), UnOp::Inc),
-                ArithUnExpr::new(tests::var("y"), UnOp::Dec),
+            vec![BinExpr::new(
+                UnExpr::new(tests::var("x"), UnOp::Inc),
+                UnExpr::new(tests::var("y"), UnOp::Dec),
                 BinOp::Add
             )
             .into()]
@@ -531,7 +526,7 @@ mod tests {
         // Groups and dollar expressions.
         assert_parse!(
             arith_seq("($x ** 2)"),
-            vec![ArithTerm::Group(vec![ArithBinExpr::new(
+            vec![ArithTerm::Group(vec![BinExpr::new(
                 ArithTerm::Expansion(vec![DollarExp::Var(tests::var("x")).into()]),
                 tests::arith_number("2"),
                 BinOp::Pow,
@@ -543,15 +538,15 @@ mod tests {
         assert_parse!(
             arith_seq("x+=1, y<<=2"),
             vec![
-                ArithBinExpr::new(tests::var("x"), tests::arith_number("1"), BinOp::AddEq).into(),
-                ArithBinExpr::new(tests::var("y"), tests::arith_number("2"), BinOp::ShlEq).into()
+                BinExpr::new(tests::var("x"), tests::arith_number("1"), BinOp::AddEq).into(),
+                BinExpr::new(tests::var("y"), tests::arith_number("2"), BinOp::ShlEq).into()
             ]
         );
 
         // Lint for using a test operator inside math stuff.
         assert_parse!(
             arith_seq("x -lt"),
-            vec![ArithBinExpr::new(tests::var("x"), tests::var("lt"), BinOp::Sub).into()],
+            vec![BinExpr::new(tests::var("x"), tests::var("lt"), BinOp::Sub).into()],
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
     }
