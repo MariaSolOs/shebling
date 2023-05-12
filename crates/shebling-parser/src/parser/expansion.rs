@@ -233,12 +233,12 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
                     |(ident, indices)| SubscriptedVar::new(ident, indices).into(),
                 ),
                 into(many1(alt((
-                    into(single_quoted),
+                    map(single_quoted, WordSgmt::SingleQuoted),
                     into(double_quoted),
                     dollar_sgmt,
-                    into(brace_expansion),
-                    into(backquoted),
-                    into(lit(char('#'))),
+                    map(brace_expansion, WordSgmt::BraceExpansion),
+                    map(backquoted, WordSgmt::BackQuoted),
+                    map(char('#'), |c| WordSgmt::Lit(c.into())),
                     // Parse a literal until something that looks like a math operator.
                     lit_word_sgmt("+-*/=%^,]?:"),
                 )))),
@@ -266,41 +266,35 @@ pub(super) fn arith_seq(span: Span) -> ParseResult<ArithSeq> {
     seq(span)
 }
 
-pub(super) fn brace_expansion(span: Span) -> ParseResult<BraceExpansion> {
-    fn braced(span: Span) -> ParseResult<BraceExpansion> {
+pub(super) fn brace_expansion(span: Span) -> ParseResult<Vec<Word>> {
+    fn braced(span: Span) -> ParseResult<Vec<Word>> {
         delimited(
             char('{'),
-            map(
-                context(
-                    "invalid sequence expression!",
-                    verify(
-                        separated_list1(char(','), braced_word),
-                        |words: &Vec<Word>| {
-                            // If the brace expansion is a single word, it must be
-                            // a lit of the form `x..y`.
-                            if words.len() == 1 {
-                                let word = &words[0];
+            context(
+                "invalid sequence expression!",
+                verify(
+                    separated_list1(char(','), braced_word),
+                    |words: &Vec<Word>| {
+                        // If the brace expansion is a single word, it must be
+                        // a lit of the form `x..y`.
+                        if words.len() == 1 {
+                            let word = &words[0];
 
-                                if word.sgmts().is_empty() {
-                                    return false;
-                                } else if let Some(lit) = word.as_lit() {
-                                    return lit.value().split_once("..").map_or(
-                                        false,
-                                        |(prefix, suffix)| {
-                                            !prefix.is_empty()
-                                                && !prefix.contains("..")
-                                                && !suffix.is_empty()
-                                                && !suffix.contains("..")
-                                        },
-                                    );
-                                }
+                            if word.sgmts().is_empty() {
+                                return false;
+                            } else if let Some(lit) = word.as_lit() {
+                                return lit.split_once("..").map_or(false, |(prefix, suffix)| {
+                                    !prefix.is_empty()
+                                        && !prefix.contains("..")
+                                        && !suffix.is_empty()
+                                        && !suffix.contains("..")
+                                });
                             }
+                        }
 
-                            true
-                        },
-                    ),
+                        true
+                    },
                 ),
-                BraceExpansion::new,
             ),
             char('}'),
         )(span)
@@ -309,16 +303,16 @@ pub(super) fn brace_expansion(span: Span) -> ParseResult<BraceExpansion> {
     fn braced_word(span: Span) -> ParseResult<Word> {
         map(
             many0(alt((
-                into(braced),
+                map(braced, WordSgmt::BraceExpansion),
                 into(dollar_exp),
-                into(single_quoted),
+                map(single_quoted, WordSgmt::SingleQuoted),
                 into(double_quoted),
                 map(
                     many1(alt((
                         escaped(""),
                         recognize_string(is_not(&*format!("{{}}\"$', \t\r\n{}", UNISPACES))),
                     ))),
-                    |lits| Lit::new(lits.concat()).into(),
+                    |lits| WordSgmt::Lit(lits.concat()),
                 ),
             ))),
             Word::new,
@@ -376,7 +370,7 @@ pub(super) fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
             delimited(pair(char('$'), char('[')), into(arith_seq), char(']')),
             into(dollar_cmd_expansion),
             into(param_expansion),
-            into(dollar_variable),
+            into(dollar_var),
         )),
     )(span)
 }
@@ -389,11 +383,11 @@ pub(super) fn dollar_sgmt(span: Span) -> ParseResult<WordSgmt> {
             preceded(char('$'), alt((into(double_quoted), into(single_quoted)))),
         ))),
         // A lonely dollar.
-        into(lit(char('$'))),
+        map(char('$'), |c| WordSgmt::Lit(c.into())),
     ))(span)
 }
 
-fn dollar_variable(span: Span) -> ParseResult<SubscriptedVar> {
+fn dollar_var(span: Span) -> ParseResult<SubscriptedVar> {
     fn dollar_ident(span: Span) -> ParseResult<String> {
         let (span, ((ident, range), has_bracket)) =
             pair(ranged(identifier), followed_by(char('[')))(span)?;
@@ -439,7 +433,7 @@ fn dollar_variable(span: Span) -> ParseResult<SubscriptedVar> {
     )(span)
 }
 
-pub(super) fn extglob(span: Span) -> ParseResult<Glob> {
+pub(super) fn extglob(span: Span) -> ParseResult<String> {
     fn group(span: Span) -> ParseResult<String> {
         delimited(char('('), sgmt, char(')'))(span)
     }
@@ -456,10 +450,7 @@ pub(super) fn extglob(span: Span) -> ParseResult<Glob> {
         ))(span)
     }
 
-    map(
-        recognize_string(pair(one_of(EXTGLOB_PREFIX), group)),
-        Glob::new,
-    )(span)
+    recognize_string(pair(one_of(EXTGLOB_PREFIX), group))(span)
 }
 
 fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
@@ -467,18 +458,18 @@ fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
         delimited(
             tag("${"),
             many0(alt((
-                into(single_quoted),
+                map(single_quoted, WordSgmt::SingleQuoted),
                 into(double_quoted),
-                into(extglob),
+                map(extglob, WordSgmt::Glob),
                 dollar_sgmt,
-                into(backquoted),
+                map(backquoted, WordSgmt::BackQuoted),
                 map(
                     // Literals, with maybe some escaped characters.
                     many1(alt((
                         escaped(BRACED_ESCAPABLE),
                         recognize_string(is_not(&*format!("\\{}", BRACED_ESCAPABLE))),
                     ))),
-                    |lits| Lit::new(lits.concat()).into(),
+                    |lits| WordSgmt::Lit(lits.concat()),
                 ),
             ))),
             char('}'),
@@ -554,38 +545,35 @@ mod tests {
     #[test]
     fn test_brace_expansion() {
         // Valid sequence expressions.
-        assert_parse!(
-            brace_expansion("{1..5}"),
-            BraceExpansion::new(vec![tests::word("1..5")])
-        );
+        assert_parse!(brace_expansion("{1..5}"), vec![tests::word("1..5")]);
         assert_parse!(
             brace_expansion("{$x..$y}"),
-            BraceExpansion::new(vec![Word::new(vec![
+            vec![Word::new(vec![
                 DollarExp::from(tests::var("x")).into(),
-                Lit::new("..").into(),
+                WordSgmt::Lit("..".into()),
                 DollarExp::from(tests::var("y")).into(),
-            ])])
+            ])]
         );
 
         // The closing brace can be escaped.
         assert_parse!(
             brace_expansion("{foo,\\}}"),
-            BraceExpansion::new(vec![tests::word("foo"), tests::word("\\}")])
+            vec![tests::word("foo"), tests::word("\\}")]
         );
 
         // Nested expansions are legal.
         assert_parse!(
             brace_expansion("{foo.{txt,md}}"),
-            BraceExpansion::new(vec![Word::new(vec![
-                Lit::new("foo.").into(),
-                BraceExpansion::new(vec![tests::word("txt"), tests::word("md")]).into()
-            ])],)
+            vec![Word::new(vec![
+                WordSgmt::Lit("foo.".into()),
+                WordSgmt::BraceExpansion(vec![tests::word("txt"), tests::word("md")]).into()
+            ])]
         );
 
         // Part of the expansion can be an empty word.
         assert_parse!(
             brace_expansion("{,foo}"),
-            BraceExpansion::new(vec![Word::new(vec![]), tests::word("foo")])
+            vec![Word::new(vec![]), tests::word("foo")]
         );
 
         // Cannot be empty.
@@ -631,7 +619,7 @@ mod tests {
                     Pipeline::new(vec![SimpleCmd::new(
                         Some(tests::word("ls")),
                         vec![],
-                        vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()],
+                        vec![Word::new(vec![WordSgmt::SingleQuoted("bar".into())]).into()],
                     )
                     .into()]),
                     ControlOp::Semi
@@ -655,33 +643,33 @@ mod tests {
     }
 
     #[test]
-    fn test_dollar_variable() {
+    fn test_dollar_var() {
         // A dollar followed by an identifier is valid.
-        assert_parse!(dollar_variable("$foo"), tests::var("foo"));
+        assert_parse!(dollar_var("$foo"), tests::var("foo"));
 
         // If not an identifier, it must be a special parameter.
-        assert_parse!(dollar_variable("$?"), tests::var("?"));
+        assert_parse!(dollar_var("$?"), tests::var("?"));
 
         // Numerical variables are fine:
-        assert_parse!(dollar_variable("$1"), tests::var("1"));
+        assert_parse!(dollar_var("$1"), tests::var("1"));
         // ...but if they're multi-digit we emit a diagnostic.
         assert_parse!(
-            dollar_variable("$123") => "23",
+            dollar_var("$123") => "23",
             tests::var("1"),
             [((1, 2), (1, 5), ParseDiagnosticKind::Unbraced)]
         );
 
         // Must begin with a dollar.
-        assert_parse!(dollar_variable("foo") => Err(1, 1));
+        assert_parse!(dollar_var("foo") => Err(1, 1));
     }
 
     #[test]
     fn test_extglob() {
         // The group can be empty.
-        assert_parse!(extglob("*()"), Glob::new("*()"));
+        assert_parse!(extglob("*()"), "*()");
 
         // Nested groups and whitespace is allowed.
-        assert_parse!(extglob("*(() | !(foo))"), Glob::new("*(() | !(foo))"));
+        assert_parse!(extglob("*(() | !(foo))"), "*(() | !(foo))");
     }
 
     #[test]
@@ -689,14 +677,14 @@ mod tests {
         // The closing brace can be escaped.
         assert_parse!(
             param_expansion("${foo\\}}"),
-            ParamExpansion::new(vec![Lit::new("foo}").into()])
+            ParamExpansion::new(vec![WordSgmt::Lit("foo}".into())])
         );
 
         // We can have nested dollar expressions.
         assert_parse!(
             param_expansion("${foo$(bar)}"),
             ParamExpansion::new(vec![
-                Lit::new("foo").into(),
+                WordSgmt::Lit("foo".into()),
                 DollarExp::CmdSub(DollarCmdSub::new(Some(tests::pipeline("bar").into()))).into()
             ])
         );

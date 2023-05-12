@@ -97,14 +97,6 @@ where
     map(opt(peek(parser)), |res| res.is_some())
 }
 
-fn lit<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<Lit>
-where
-    P: FnMut(Span<'a>) -> ParseResult<R>,
-    R: Into<String>,
-{
-    map(parser, |res| Lit::new(res.into()))
-}
-
 fn ranged<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<(R, Range)>
 where
     P: FnMut(Span<'a>) -> ParseResult<R>,

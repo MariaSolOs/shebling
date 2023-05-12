@@ -107,7 +107,7 @@ macro_rules! assert_parse {
 
 // region: Shared constructors for common (and verbose) AST objects.
 pub(crate) fn arith_number(n: &str) -> ArithTerm {
-    ArithTerm::Expansion(vec![Lit::new(n).into()])
+    ArithTerm::Expansion(vec![WordSgmt::Lit(n.into())])
 }
 
 pub(crate) fn cmd(lit: &str) -> SimpleCmd {
@@ -119,7 +119,7 @@ pub(crate) fn pipeline(lit: &str) -> Pipeline {
 }
 
 pub(crate) fn word(lit: &str) -> Word {
-    Word::new(vec![Lit::new(lit).into()])
+    Word::new(vec![WordSgmt::Lit(lit.into())])
 }
 
 pub(crate) fn var(ident: &str) -> SubscriptedVar {

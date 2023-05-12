@@ -5,7 +5,7 @@ pub(super) const DOUBLE_ESCAPABLE: &str = "\\\"$`";
 pub(super) const DOUBLE_UNIQUOTES: &str = "\u{201C}\u{201D}\u{2033}\u{2036}";
 pub(super) const SINGLE_UNIQUOTES: &str = "\u{2018}\u{2019}";
 
-pub(super) fn backquoted(span: Span) -> ParseResult<BackQuoted> {
+pub(super) fn backquoted(span: Span) -> ParseResult<Term> {
     escaping_backquoted(false)(span)
 }
 
@@ -20,7 +20,7 @@ pub(super) fn double_quoted(span: Span) -> ParseResult<DoubleQuoted> {
         into(dollar_exp),
         into(double_quoted_lit),
         into(escaping_backquoted(true)),
-        into(lit(double_uniquote)),
+        into(recognize_string(double_uniquote)),
     )))(span)?;
     let (span, end) = cut(context("Expected end of double quoted string!", tag("\"")))(span)?;
 
@@ -29,10 +29,10 @@ pub(super) fn double_quoted(span: Span) -> ParseResult<DoubleQuoted> {
         followed_by(alt((satisfy(is_sus_char_after_quote), one_of("$\""))))(span)?;
     if sus_next_char {
         if let Some(DoubleQuotedSgmt::Lit(first_lit)) = sgmts.first() {
-            if !first_lit.value().starts_with('\n')
+            if !first_lit.starts_with('\n')
                 && sgmts.iter().any(|sgmt| {
                     if let DoubleQuotedSgmt::Lit(lit) = sgmt {
-                        lit.value().contains('\n')
+                        lit.contains('\n')
                     } else {
                         false
                     }
@@ -46,7 +46,7 @@ pub(super) fn double_quoted(span: Span) -> ParseResult<DoubleQuoted> {
     Ok((span, DoubleQuoted::new(sgmts)))
 }
 
-fn double_quoted_lit(span: Span) -> ParseResult<Lit> {
+fn double_quoted_lit(span: Span) -> ParseResult<String> {
     fn double_quoted_escape(span: Span) -> ParseResult<String> {
         let (span, (escaped, range)) = ranged(escaped(DOUBLE_ESCAPABLE))(span)?;
 
@@ -63,9 +63,9 @@ fn double_quoted_lit(span: Span) -> ParseResult<Lit> {
         Ok((span, escaped))
     }
 
-    fn lonely_dollar(span: Span) -> ParseResult<Lit> {
+    fn lonely_dollar(span: Span) -> ParseResult<String> {
         // Parse the literal dollar.
-        let (span, (dollar, range)) = ranged(lit(char('$')))(span)?;
+        let (span, (dollar, range)) = ranged(char('$'))(span)?;
 
         // Sometimes people want to escape a dollar inside double quotes and end the string
         // to achieve that. But that's ugly, they should just use a backslash.
@@ -84,7 +84,7 @@ fn double_quoted_lit(span: Span) -> ParseResult<Lit> {
             );
         }
 
-        Ok((span, dollar))
+        Ok((span, dollar.into()))
     }
 
     alt((
@@ -97,7 +97,7 @@ fn double_quoted_lit(span: Span) -> ParseResult<Lit> {
                     DOUBLE_ESCAPABLE, DOUBLE_UNIQUOTES
                 ))),
             ))),
-            |sgmt| Lit::new(sgmt.concat()),
+            |sgmt| sgmt.concat(),
         ),
         lonely_dollar,
     ))(span)
@@ -125,7 +125,7 @@ pub(super) fn escaped<'a>(can_escape: &'static str) -> impl FnMut(Span<'a>) -> P
     ))
 }
 
-fn escaping_backquoted(escape_double_quotes: bool) -> impl Fn(Span) -> ParseResult<BackQuoted> {
+fn escaping_backquoted(escape_double_quotes: bool) -> impl Fn(Span) -> ParseResult<Term> {
     fn backquote(span: Span) -> ParseResult<Span> {
         alt((tag("`"), |span| {
             let (span, (tick, range)) = ranged(tag("´"))(span)?;
@@ -171,7 +171,7 @@ fn escaping_backquoted(escape_double_quotes: bool) -> impl Fn(Span) -> ParseResu
         let (cmd_span, cmd) = all_consuming(preceded(multi_trivia, term))(cmd_span)?;
         span.extra.extend_diags(cmd_span.extra);
 
-        Ok((span, BackQuoted::new(cmd)))
+        Ok((span, cmd))
     }
 }
 
@@ -179,7 +179,7 @@ pub(super) fn line_continuation(span: Span) -> ParseResult<()> {
     swallow(pair(backslash, newline))(span)
 }
 
-pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
+pub(super) fn single_quoted(span: Span) -> ParseResult<String> {
     // Parse the opening quote and the string.
     let (span, (start, string)) = pair(
         tag("'"),
@@ -220,7 +220,7 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<SingleQuoted> {
         }
     }
 
-    Ok((span, SingleQuoted::new(string)))
+    Ok((span, string))
 }
 
 pub(super) fn single_uniquote(span: Span) -> ParseResult<char> {
@@ -259,7 +259,7 @@ mod tests {
         // Lint for the wrong kind of backquote.
         assert_parse!(
             backquoted("´foo´"),
-            BackQuoted::new(tests::pipeline("foo")),
+            tests::pipeline("foo").into(),
             [
                 ((1, 1), (1, 2), ParseDiagnosticKind::SusToken),
                 ((1, 5), (1, 6), ParseDiagnosticKind::SusToken)
@@ -269,14 +269,14 @@ mod tests {
         // Unclosed string warning.
         assert_parse!(
             backquoted("`foo\n`bar") => "bar",
-            BackQuoted::new(tests::pipeline("foo")),
+            tests::pipeline("foo").into(),
             [((1, 1), ParseDiagnosticKind::UnclosedString)]
         );
 
         // Make sure lints from the subparser are included.
         assert_parse!(
             backquoted("`foo\\nbar`"),
-            BackQuoted::new(tests::pipeline("foonbar")),
+            tests::pipeline("foonbar").into(),
             [((1, 5), (1, 7), ParseDiagnosticKind::BadEscape)]
         );
     }
@@ -298,7 +298,7 @@ mod tests {
         // Looks unclosed.
         assert_parse!(
             double_quoted("\"foo\nbar\"baz") => "baz",
-            DoubleQuoted::new(vec![Lit::new("foo\nbar").into()]),
+            DoubleQuoted::new(vec![DoubleQuotedSgmt::Lit("foo\nbar".into())]),
             [((1, 1), ParseDiagnosticKind::UnclosedString)]
         );
 
@@ -315,10 +315,10 @@ mod tests {
         assert_parse!(
             double_quoted("\"foo “bar”\""),
             DoubleQuoted::new(vec![
-                Lit::new("foo ").into(),
-                Lit::new("“").into(),
-                Lit::new("bar").into(),
-                Lit::new("”").into()
+                DoubleQuotedSgmt::Lit("foo ".into()),
+                DoubleQuotedSgmt::Lit("“".into()),
+                DoubleQuotedSgmt::Lit("bar".into()),
+                DoubleQuotedSgmt::Lit("”".into()),
             ]),
             [
                 ((1, 6), (1, 7), ParseDiagnosticKind::Unichar),
@@ -329,35 +329,37 @@ mod tests {
         // Double quotes can be escaped in backticks.
         assert_parse!(
             double_quoted("\"`\"foo\"`\""),
-            DoubleQuoted::new(vec![BackQuoted::new(Pipeline::new(vec![SimpleCmd::new(
-                Some(Word::new(vec![DoubleQuoted::new(vec![
-                    Lit::new("foo").into()
-                ])
-                .into()])),
-                vec![],
-                vec![]
-            )
-            .into()]))
-            .into()])
+            DoubleQuoted::new(vec![DoubleQuotedSgmt::BackQuoted(
+                Pipeline::new(vec![SimpleCmd::new(
+                    Some(Word::new(vec![DoubleQuoted::new(vec![
+                        DoubleQuotedSgmt::Lit("foo".into())
+                    ])
+                    .into()])),
+                    vec![],
+                    vec![]
+                )
+                .into()])
+                .into()
+            )])
         );
     }
 
     #[test]
     fn test_double_quoted_lit() {
         // Only certain characters can be escaped inside double quotes.
-        assert_parse!(double_quoted_lit("foo\\$"), Lit::new("foo$"));
+        assert_parse!(double_quoted_lit("foo\\$"), "foo$");
         assert_parse!(
             double_quoted_lit("foo\\n"),
-            Lit::new("foo\\n"),
+            "foo\\n",
             [((1, 4), (1, 6), ParseDiagnosticKind::BadEscape)]
         );
 
         // A lonely dollar is fine,
-        assert_parse!(double_quoted_lit("$"), Lit::new("$"));
+        assert_parse!(double_quoted_lit("$"), "$");
         // ...but emit warning when it looks like the "literal dollar hack".
         assert_parse!(
             double_quoted_lit("$\"1") => "\"1",
-            Lit::new("$"),
+            "$",
             [((1, 1), (1, 2), ParseDiagnosticKind::MissingEscape)]
         );
 
@@ -381,36 +383,36 @@ mod tests {
     #[test]
     fn test_single_quoted() {
         // A correctly written single quoted string.
-        assert_parse!(single_quoted("'foo bar'"), SingleQuoted::new("foo bar"));
+        assert_parse!(single_quoted("'foo bar'"), "foo bar");
 
         // An empty string is also fine.
-        assert_parse!(single_quoted("''"), SingleQuoted::new(""));
+        assert_parse!(single_quoted("''"), "");
 
         // Warn when finding a uniquote.
         assert_parse!(
             single_quoted("'let’s'"),
-            SingleQuoted::new("let’s"),
+            "let’s",
             [((1, 5), (1, 6), ParseDiagnosticKind::Unichar)]
         );
 
         // The ending quote looks like a failed escape.
         assert_parse!(
             single_quoted("'foo\\'"),
-            SingleQuoted::new("foo\\"),
+            "foo\\",
             [((1, 6), ParseDiagnosticKind::BadEscape)]
         );
 
         // Apostrophe that ends the string.
         assert_parse!(
             single_quoted("'let's'") => "s'",
-            SingleQuoted::new("let"),
+            "let",
             [((1, 5), (1, 6), ParseDiagnosticKind::UnclosedString)]
         );
 
         // Multi-line string, but the next character looks sus.
         assert_parse!(
             single_quoted("'foo\n'bar") => "bar",
-            SingleQuoted::new("foo\n"),
+            "foo\n",
             [((1, 1), ParseDiagnosticKind::UnclosedString)]
         );
 

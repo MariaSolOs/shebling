@@ -228,7 +228,7 @@ fn case_clause(span: Span) -> ParseResult<CaseClause> {
 
         // Any literal except 'esac' is valid pattern in a case statement.
         let esac = Keyword::Esac.token();
-        if word.as_lit().is_some_and(|lit| lit.value() == esac) {
+        if word.as_lit().is_some_and(|lit| lit == esac) {
             span.extra.diag(
                 ParseDiagnostic::builder(ParseDiagnosticKind::SusToken)
                     .label("literal 'esac'", range)
@@ -484,10 +484,10 @@ fn cond(span: Span) -> ParseResult<Cond> {
             .last()
             .expect("word() parses at least one segment.")
         {
-            if lit.value().ends_with(']')
+            if lit.ends_with(']')
                 && word.sgmts().iter().all(|sgmt| {
                     if let WordSgmt::Lit(lit) = sgmt {
-                        !lit.value().contains('[')
+                        !lit.contains('[')
                     } else {
                         true
                     }
@@ -655,7 +655,6 @@ fn cond(span: Span) -> ParseResult<Cond> {
         // Check if the expression ends with what looks like a binary operator. If
         // so, the user might have forgotten a space.
         if let Some(WordSgmt::Lit(lit)) = expr.sgmts().last() {
-            let lit = lit.value();
             // TODO: create a shared public array with these?
             if let Some(op) = vec![
                 "-nt", "-ot", "-ef", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "==", "!=", "=~",
@@ -718,7 +717,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
             // Read a group.
             map(
                 tuple((
-                    into(lit(char('('))),
+                    map(char('('), |c| WordSgmt::Lit(c.into())),
                     many0(alt((
                         regex_sgmts,
                         map(
@@ -726,10 +725,10 @@ fn cond(span: Span) -> ParseResult<Cond> {
                                 escaped(""),
                                 recognize_string(is_not(&*format!("'(){}", DOUBLE_ESCAPABLE))),
                             ))),
-                            |lits| vec![Lit::new(lits.concat()).into()],
+                            |lits| vec![WordSgmt::Lit(lits.concat())],
                         ),
                     ))),
-                    into(lit(char(')'))),
+                    map(char(')'), |c| WordSgmt::Lit(c.into())),
                 )),
                 |(left, sgmts, right)| {
                     let mut sgmts = sgmts.into_iter().flatten().collect::<Vec<_>>();
@@ -743,11 +742,13 @@ fn cond(span: Span) -> ParseResult<Cond> {
             // Ungrouped regex segment.
             map(
                 alt((
-                    into(single_quoted),
+                    map(single_quoted, WordSgmt::SingleQuoted),
                     into(double_quoted),
                     into(dollar_exp),
                     lit_word_sgmt("( "),
-                    into(lit(one_of(&*format!("{}{{}}[]|$", EXTGLOB_PREFIX)))),
+                    map(one_of(&*format!("{}{{}}[]|$", EXTGLOB_PREFIX)), |c| {
+                        WordSgmt::Lit(c.into())
+                    }),
                 )),
                 |sgmt| vec![sgmt],
             ),
@@ -1228,9 +1229,9 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
     if let Some((cmd, range)) = &cmd {
         // Check if the command looks like a comment.
         if let WordSgmt::Lit(lit) = &cmd.sgmts()[0] {
-            if lit.value().starts_with("//") || {
+            if lit.starts_with("//") || {
                 if let Some(WordSgmt::Glob(glob)) = &cmd.sgmts().get(1) {
-                    lit.value() == "/" && glob == "*"
+                    lit == "/" && glob == "*"
                 } else {
                     false
                 }
@@ -1244,8 +1245,6 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
         }
 
         if let Some(cmd) = cmd.as_lit() {
-            let cmd = cmd.value();
-
             // Not using the right keyword for an "else if" statement.
             if matches!(&*cmd.to_ascii_lowercase(), "elsif" | "elseif") {
                 span.extra.diag(
@@ -1259,9 +1258,9 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
             let cmd = if cmd == "builtin" {
                 let builtin;
                 (span, builtin) = opt(map(terminated(word, trivia), |word| {
-                    word.as_lit().map(|lit| String::from(lit.value()))
+                    String::from(word.as_lit().unwrap_or_default())
                 }))(span)?;
-                builtin.flatten().unwrap_or_default()
+                builtin.unwrap_or_default()
             } else {
                 cmd.into()
             };
@@ -1309,8 +1308,7 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
     // Ignore flag arguments.
     suffix.retain(|sgmt| {
         if let CmdSuffixSgmt::Word(word) = sgmt {
-            word.as_lit()
-                .map_or(true, |lit| !lit.value().starts_with('-'))
+            word.as_lit().map_or(true, |lit| !lit.starts_with('-'))
         } else {
             true
         }
@@ -1827,7 +1825,7 @@ mod tests {
             for_loop("for foo in *; { bar; }"),
             InListed::new(
                 "foo",
-                vec![Word::new(vec![Glob::new("*").into()])],
+                vec![Word::new(vec![WordSgmt::Glob("*".into())])],
                 Pipeline::new(vec![tests::cmd("bar").into()]),
             )
             .into()
@@ -2060,7 +2058,7 @@ mod tests {
         assert_parse!(
             simple_cmd("/* echo */") => "echo */",
             SimpleCmd::new(
-                Some(Word::new(vec![Lit::new("/").into(), Glob::new("*").into()])),
+                Some(Word::new(vec![WordSgmt::Lit("/".into()), WordSgmt::Glob("*".into())])),
                 vec![],
                 vec![]
             ),
@@ -2123,13 +2121,13 @@ mod tests {
                     Pipeline::new(vec![SimpleCmd::new(
                         Some(tests::word("echo")),
                         vec![],
-                        vec![Word::new(vec![SingleQuoted::new("foo").into()]).into()]
+                        vec![Word::new(vec![WordSgmt::SingleQuoted("foo".into())]).into()]
                     )
                     .into()]),
                     Pipeline::new(vec![SimpleCmd::new(
                         Some(tests::word("echo")),
                         vec![],
-                        vec![Word::new(vec![SingleQuoted::new("bar").into()]).into()]
+                        vec![Word::new(vec![WordSgmt::SingleQuoted("bar".into())]).into()]
                     )
                     .into()]),
                     ControlOp::AndIf,

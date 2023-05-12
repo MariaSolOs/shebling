@@ -101,7 +101,7 @@ pub(super) fn assign(span: Span) -> ParseResult<Assign> {
     ))
 }
 
-fn bracketed_glob(span: Span) -> ParseResult<Glob> {
+fn bracketed_glob(span: Span) -> ParseResult<String> {
     map(
         delimited(
             char('['),
@@ -127,7 +127,7 @@ fn bracketed_glob(span: Span) -> ParseResult<Glob> {
                 sgmts.insert(0, negation.into());
             }
 
-            Glob::new(format!("[{}]", sgmts.concat()))
+            format!("[{}]", sgmts.concat())
         },
     )(span)
 }
@@ -223,17 +223,14 @@ fn lit_string(end_pattern: &'static str) -> impl Fn(Span) -> ParseResult<String>
 pub(super) fn lit_word_sgmt<'a>(
     end_pattern: &'static str,
 ) -> impl FnMut(Span<'a>) -> ParseResult<WordSgmt> {
-    into(lit(lit_string(end_pattern)))
+    map(lit_string(end_pattern), WordSgmt::Lit)
 }
 
-fn proc_sub(span: Span) -> ParseResult<ProcSub> {
-    map(
-        delimited(
-            tuple((one_of("<>"), char('('), multi_trivia)),
-            many0(term),
-            pair(multi_trivia, char(')')),
-        ),
-        ProcSub::new,
+fn proc_sub(span: Span) -> ParseResult<Vec<Term>> {
+    delimited(
+        tuple((one_of("<>"), char('('), multi_trivia)),
+        many0(term),
+        pair(multi_trivia, char(')')),
     )(span)
 }
 
@@ -244,11 +241,11 @@ fn subscript(span: Span) -> ParseResult<String> {
             "empty subscript!",
             many1(alt((
                 word_sgmt_before_pattern("]"),
-                into(lit(trivia1)),
-                into(lit(recognize_string(is_a(&*format!(
-                    "|&;<>() '\t\n\r\u{A0}{}",
-                    DOUBLE_ESCAPABLE
-                ))))),
+                map(trivia1, WordSgmt::Lit),
+                map(
+                    recognize_string(is_a(&*format!("|&;<>() '\t\n\r\u{A0}{}", DOUBLE_ESCAPABLE))),
+                    WordSgmt::Lit,
+                ),
             ))),
         )),
         char(']'),
@@ -263,7 +260,6 @@ pub(super) fn word(span: Span) -> ParseResult<Word> {
 
     // Check for misplaced keywords.
     if let Some(lit) = word.as_lit() {
-        let lit = lit.value();
         if vec![
             Keyword::Do,
             Keyword::Done,
@@ -292,7 +288,7 @@ pub(super) fn word_sgmt(span: Span) -> ParseResult<WordSgmt> {
 fn word_sgmt_before_pattern<'a>(
     pattern: &'static str,
 ) -> impl FnMut(Span<'a>) -> ParseResult<WordSgmt> {
-    fn lit_curly(span: Span) -> ParseResult<Lit> {
+    fn lit_curly(span: Span) -> ParseResult<String> {
         // Curly that's not a keyword.
         let (span, (curly, range)) = ranged(one_of("{}"))(span)?;
         span.extra.diag(
@@ -301,7 +297,7 @@ fn word_sgmt_before_pattern<'a>(
                 .help("If intended, quote it. Else add a semicolon or new line before it."),
         );
 
-        Ok((span, Lit::new(curly)))
+        Ok((span, curly.into()))
     }
 
     move |span| {
@@ -312,22 +308,24 @@ fn word_sgmt_before_pattern<'a>(
         let (span, _) = context("forgot to escape this parenthesis?", not(char('(')))(span)?;
 
         alt((
-            into(single_quoted),
+            map(single_quoted, WordSgmt::SingleQuoted),
             into(double_quoted),
-            into(extglob),
-            // Regex match characters:
-            map(one_of("*?"), |c| Glob::new(c).into()),
-            into(bracketed_glob),
+            map(
+                alt((extglob, recognize_string(one_of("*?")), bracketed_glob)),
+                WordSgmt::Glob,
+            ),
             // Fallback for other glob prefix characters:
-            into(lit(one_of("@!+["))),
+            map(one_of("@!+["), |c| WordSgmt::Lit(c.into())),
             dollar_sgmt,
-            into(brace_expansion),
-            into(backquoted),
-            into(proc_sub),
-            into(lit(alt((single_uniquote, double_uniquote)))),
+            map(brace_expansion, WordSgmt::BraceExpansion),
+            map(backquoted, WordSgmt::BackQuoted),
+            map(proc_sub, WordSgmt::ProcSub),
+            map(alt((single_uniquote, double_uniquote)), |quote| {
+                WordSgmt::Lit(quote.into())
+            }),
             lit_word_sgmt(pattern),
             // Literal curly braces:
-            into(alt((lit(recognize_string(tag("{}"))), lit_curly))),
+            map(alt((recognize_string(tag("{}")), lit_curly)), WordSgmt::Lit),
         ))(span)
     }
 }
@@ -379,7 +377,7 @@ mod tests {
             assign("arr[0]='foo'"),
             Assign::new(
                 SubscriptedVar::new("arr", vec!["0".into()]),
-                Word::new(vec![SingleQuoted::new("foo").into()]),
+                Word::new(vec![WordSgmt::SingleQuoted("foo".into())]),
                 BinOp::Eq,
             )
         );
@@ -428,16 +426,13 @@ mod tests {
     #[test]
     fn test_bracketed_glob() {
         // Predefined character class.
-        assert_parse!(bracketed_glob("[[:alpha:]]"), Glob::new("[[:alpha:]]"));
+        assert_parse!(bracketed_glob("[[:alpha:]]"), "[[:alpha:]]");
 
         // Can be negated and have multiple segments.
-        assert_parse!(
-            bracketed_glob("[^[:alpha:]1-9]"),
-            Glob::new("[^[:alpha:]1-9]")
-        );
+        assert_parse!(bracketed_glob("[^[:alpha:]1-9]"), "[^[:alpha:]1-9]");
 
         // ']' can be matched if it's the only character in the class.
-        assert_parse!(bracketed_glob("[]]"), Glob::new("[]]"));
+        assert_parse!(bracketed_glob("[]]"), "[]]");
     }
 
     #[test]
@@ -512,8 +507,8 @@ mod tests {
         assert_parse!(
             word("'foo'*$bar"),
             Word::new(vec![
-                SingleQuoted::new("foo").into(),
-                Glob::new("*").into(),
+                WordSgmt::SingleQuoted("foo".into()),
+                WordSgmt::Glob("*".into()),
                 DollarExp::Var(tests::var("bar")).into()
             ])
         );
@@ -540,7 +535,7 @@ mod tests {
         // Curly brace being parsed as a literal.
         assert_parse!(
             word_sgmt("{foo;}") => "foo;}",
-            Lit::new("{").into(),
+            WordSgmt::Lit("{".into()),
             [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
         );
     }

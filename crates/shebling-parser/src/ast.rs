@@ -237,7 +237,7 @@ pub(crate) enum DollarExp {
     CmdSub(DollarCmdSub),
     DoubleQuoting(DoubleQuoted),
     ParamExpansion(ParamExpansion),
-    SingleQuoting(SingleQuoted),
+    SingleQuoting(String),
     Var(SubscriptedVar),
 }
 
@@ -255,45 +255,6 @@ pub(crate) struct DollarCmdSub {
 #[derive(Debug, New, PartialEq)]
 pub struct ParamExpansion {
     sgmts: Vec<WordSgmt>,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct Glob {
-    #[new(into)]
-    pattern: String,
-}
-
-// TODO: Write a macro for these impls?
-impl<S: AsRef<str> + ?Sized> PartialEq<S> for Glob {
-    fn eq(&self, other: &S) -> bool {
-        self.pattern == other.as_ref()
-    }
-}
-// endregion
-
-// region: Quoted strings.
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct SingleQuoted {
-    #[new(into)]
-    string: String,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct DoubleQuoted {
-    sgmts: Vec<DoubleQuotedSgmt>,
-}
-
-#[derive(Debug, From, PartialEq)]
-pub(crate) enum DoubleQuotedSgmt {
-    BackQuoted(BackQuoted),
-    Lit(Lit),
-    DollarExp(DollarExp),
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct BackQuoted {
-    #[new(into)]
-    cmd: Term,
 }
 // endregion
 
@@ -325,25 +286,29 @@ tokenizable! {
     }
 }
 
-/// Sequence of [WordSgmt]s treated as a unit by the shell.
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct Word {
-    sgmts: Vec<WordSgmt>,
-}
+/// Sequence of [word segments](WordSgmt) treated as a unit by the shell.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Word(Vec<WordSgmt>);
 
 impl Word {
-    pub(crate) fn sgmts(&self) -> &[WordSgmt] {
-        &self.sgmts
+    /// Creates a new [Word] containing the given [segments](WordSgmt).
+    pub(crate) fn new(sgmts: Vec<WordSgmt>) -> Self {
+        Self(sgmts)
     }
 
-    /// If this [Word] represents a literal string, returns the [Lit].
+    /// Returns a reference to this [Word]'s segments.
+    pub(crate) fn sgmts(&self) -> &[WordSgmt] {
+        &self.0
+    }
+
+    /// If this [Word] represents a literal string, returns the literal.
     ///
     /// A word is considered a literal if:
     /// - The word has a single segment.
     /// - Such segment is a [WordSgmt::Lit].
-    pub(crate) fn as_lit(&self) -> Option<&Lit> {
-        match &self.sgmts.first() {
-            Some(WordSgmt::Lit(lit)) if self.sgmts.len() == 1 => Some(lit),
+    pub(crate) fn as_lit(&self) -> Option<&str> {
+        match &self.0.first() {
+            Some(WordSgmt::Lit(lit)) if self.0.len() == 1 => Some(lit),
             _ => None,
         }
     }
@@ -351,37 +316,44 @@ impl Word {
 
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum WordSgmt {
-    BackQuoted(BackQuoted),
-    BraceExpansion(BraceExpansion),
+    /// Backquoted command substitution.
+    BackQuoted(Term),
+
+    /// Brace expansion.
+    BraceExpansion(Vec<Word>),
+
+    /// Dollar-prefixed expression.
+    #[from]
     DollarExp(DollarExp),
+
+    /// Double-quoted string.
+    #[from]
     DoubleQuoted(DoubleQuoted),
-    Glob(Glob),
-    Lit(Lit),
-    ProcSub(ProcSub),
-    SingleQuoted(SingleQuoted),
+
+    /// Pattern match sequence.
+    Glob(String),
+
+    /// Literal, unquoted string.
+    Lit(String),
+
+    /// Process substitution.
+    ProcSub(Vec<Term>),
+
+    /// Single-quoted string.
+    SingleQuoted(String),
 }
 
+/// A sequence of [word segments][DoubleQuotedSgmt] enclosed in `""`.
 #[derive(Debug, New, PartialEq)]
-pub(crate) struct BraceExpansion {
-    smgts: Vec<Word>,
+pub(crate) struct DoubleQuoted {
+    sgmts: Vec<DoubleQuotedSgmt>,
 }
 
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct Lit {
-    #[new(into)]
-    value: String,
-}
-
-impl Lit {
-    // TODO: Restrict the access to value?
-    pub(crate) fn value(&self) -> &str {
-        &self.value
-    }
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct ProcSub {
-    list: Vec<Term>,
+#[derive(Debug, From, PartialEq)]
+pub(crate) enum DoubleQuotedSgmt {
+    BackQuoted(Term),
+    Lit(String),
+    DollarExp(DollarExp),
 }
 
 #[derive(Debug, New, PartialEq)]
@@ -411,9 +383,14 @@ pub(crate) enum Value {
 }
 
 /// An array variable.
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct Array {
-    elems: Vec<Value>,
+#[derive(Debug, PartialEq)]
+pub(crate) struct Array(Vec<Value>);
+
+impl Array {
+    /// Creates a new [array](Array) containing the given [values](Value).
+    pub(crate) fn new(values: Vec<Value>) -> Self {
+        Self(values)
+    }
 }
 
 /// [Array] element of the form `arr[subscript]=value`.
@@ -430,6 +407,7 @@ pub(crate) struct KeyValue {
 pub(crate) struct CondOp(String);
 
 impl CondOp {
+    /// Creates a new [conditional operator](CondOp).
     pub(crate) fn new(op: impl Into<String>) -> Self {
         Self(op.into())
     }
@@ -513,7 +491,8 @@ pub(crate) enum FileDesc {
     Var(SubscriptedVar),
 }
 
-/// Shell redirection, used to change the files a [Cmd] reads and writes to.
+/// Shell redirection, used to change the files a [command](Cmd) reads
+/// and writes to.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Redir {
     file_desc: Option<FileDesc>,
@@ -531,16 +510,16 @@ pub(crate) enum Cmd {
     Simple(SimpleCmd),
 }
 
-/// [Cmd] defined by a particular [Keyword] followed by a shell programming
-/// language construct.
+/// [Command](Cmd) beginning with a particular [Keyword] and formed by
+/// a shell programming language construct.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CompoundCmd {
     cmd: Construct,
     redirs: Vec<Redir>,
 }
 
-/// [Cmd] preceded by [Keyword::Coproc]. A [Coproc] is executed asynchronously
-/// in a subshell.
+/// [Command](Cmd) preceded by ["coproc"](Keyword::Coproc). A [coprocess](Coproc)
+/// is executed asynchronously in a subshell.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Coproc {
     name: Option<String>,
@@ -548,7 +527,8 @@ pub(crate) struct Coproc {
     cmd: Box<Cmd>,
 }
 
-/// Sequence of [Word]s separated by blanks, terminated by a [ControlOp].
+/// Sequence of [Word]s separated by blanks, terminated by a
+/// [control operator](ControlOp).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct SimpleCmd {
     cmd: Option<Word>,
@@ -556,14 +536,14 @@ pub(crate) struct SimpleCmd {
     suffix: Vec<CmdSuffixSgmt>,
 }
 
-/// A [Word] that precedes the command in a [SimpleCmd].
+/// A [Word] that precedes the command in a [simple command](SimpleCmd).
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum CmdPrefixSgmt {
     Assign(Assign),
     Redir(Redir),
 }
 
-/// A [Word] that follows the command in a [SimpleCmd].
+/// A [Word] that follows the command in a [simple command](SimpleCmd).
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum CmdSuffixSgmt {
     ArithSeq(ArithSeq),
@@ -587,29 +567,32 @@ tokenizable! {
     }
 }
 
-/// Either a "leaf" [Pipeline], or a [BinExpr] of [Term]s.
+/// Either a "leaf" [Pipeline], or a [binary expression](BinExpr) of [Term]s.
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum Term {
     List(List),
     Pipeline(Pipeline),
 }
 
-/// A sequence of [Cmd]s separated by [ControlOp]s.
+/// A sequence of [commands](Cmd) separated by [|](ControlOp::Or) or
+/// [|&](ControlOp::OrAnd).
 #[derive(Debug, PartialEq)]
 pub(crate) struct Pipeline(Vec<Cmd>);
 
 impl Pipeline {
+    /// Creates a new [Pipeline] containing the given [commands](Cmd).
     pub(crate) fn new(cmds: Vec<Cmd>) -> Self {
         Self(cmds)
     }
 }
 
-/// A sequence of [Term]s separated by [ControlOp]s.
+/// A sequence of [Term]s separated by [control operators](ControlOp).
 pub(crate) type List = BinExpr<ControlOp, Term>;
 // endregion
 
 // region: Command constructs.
-/// A shell programming language construct, which form the body of a [CompoundCmd].
+/// A shell programming language construct, which form the body of a
+/// [compound command](CompoundCmd).
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum Construct {
     BatsTest(Function),
@@ -629,14 +612,14 @@ pub(crate) enum Construct {
     While(CondBlock),
 }
 
-/// Conditional command construct beginning with [Keyword::Case].
+/// Conditional command construct beginning with ["case"](Keyword::Case).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CaseCmd {
     word: Word,
     clauses: Vec<CaseClause>,
 }
 
-/// Clause in a [CaseCmd].
+/// Clause in a [case command](CaseCmd).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct CaseClause {
     pattern: Vec<Word>,
@@ -645,7 +628,7 @@ pub(crate) struct CaseClause {
 }
 
 tokenizable! {
-    /// Terminators of a [CaseClause].
+    /// Terminators of a [case clause](CaseClause).
     enum ClauseSep {
         /// No subsequent matches are attempted after the first pattern match.
         Break(";;"),
@@ -659,14 +642,14 @@ tokenizable! {
     }
 }
 
-/// Looping command construct beginning with [Keyword::For].
+/// Looping command construct beginning with ["for"](Keyword::For).
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum ForLoop {
     Arith(ArithForLoop),
     Listed(InListed),
 }
 
-/// Arithmetic, `C`-style [ForLoop].
+/// Arithmetic, `C`-style [for-loop](ForLoop).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct ArithForLoop {
     header: (ArithSeq, ArithSeq, ArithSeq),
@@ -693,7 +676,7 @@ pub(crate) struct Function {
     body: Term,
 }
 
-/// Conditional command construct beginning with [Keyword::If].
+/// Conditional command construct beginning with ["if"](Keyword::If).
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct IfCmd {
     if_branch: CondBlock,

@@ -39,7 +39,7 @@ pub(super) fn redir(span: Span) -> ParseResult<Redir> {
                         recognize_string(pair(digit1, opt(char('-')))),
                         recognize_string(char('-')),
                     )),
-                    |word| Word::new(vec![Lit::new(word).into()]),
+                    |word| Word::new(vec![WordSgmt::Lit(word)]),
                 ),
             ),
             // Redirection from/to a file.
