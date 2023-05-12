@@ -426,10 +426,13 @@ pub(crate) struct KeyValue {
 // endregion
 
 // region: Conditional expressions.
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct CondOp {
-    #[new(into)]
-    op: String,
+#[derive(Debug, PartialEq)]
+pub(crate) struct CondOp(String);
+
+impl CondOp {
+    pub(crate) fn new(op: impl Into<String>) -> Self {
+        Self(op.into())
+    }
 }
 
 impl From<BinOp> for CondOp {
@@ -446,38 +449,35 @@ impl From<UnOp> for CondOp {
 
 impl<S: AsRef<str> + ?Sized> PartialEq<S> for CondOp {
     fn eq(&self, other: &S) -> bool {
-        self.op == other.as_ref()
+        self.0 == other.as_ref()
     }
 }
 
 impl PartialEq<BinOp> for CondOp {
     fn eq(&self, other: &BinOp) -> bool {
-        self.op == other.token()
+        self.0 == other.token()
     }
 }
 
 impl PartialEq<UnOp> for CondOp {
     fn eq(&self, other: &UnOp) -> bool {
-        self.op == other.token()
+        self.0 == other.token()
     }
 }
 
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum CondExpr {
-    BinExpr(CondBinExpr),
-    Group(CondGroup),
-    UnExpr(CondUnExpr),
+    /// A binary expression (e.g. `x -eq y`).
+    BinExpr(BinExpr<CondOp, CondExpr>),
+
+    /// Parenthesized expression (e.g. `( x -eq y )`).
+    Group(Box<CondExpr>),
+
+    /// A binary expression (e.g. `-z x`).
+    UnExpr(UnExpr<CondOp, CondExpr>),
+
+    /// A nullary expression.
     Word(Word),
-}
-
-pub(crate) type CondBinExpr = BinExpr<CondOp, CondExpr>;
-
-pub(crate) type CondUnExpr = UnExpr<CondOp, CondExpr>;
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct CondGroup {
-    #[new(into)]
-    group: Box<CondExpr>,
 }
 
 /// Conditional expression enclosed in `[..]` or `[[..]]`.
@@ -539,6 +539,8 @@ pub(crate) struct CompoundCmd {
     redirs: Vec<Redir>,
 }
 
+/// [Cmd] preceded by [Keyword::Coproc]. A [Coproc] is executed asynchronously
+/// in a subshell.
 #[derive(Debug, New, PartialEq)]
 pub(crate) struct Coproc {
     name: Option<String>,
@@ -593,9 +595,13 @@ pub(crate) enum Term {
 }
 
 /// A sequence of [Cmd]s separated by [ControlOp]s.
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct Pipeline {
-    cmds: Vec<Cmd>,
+#[derive(Debug, PartialEq)]
+pub(crate) struct Pipeline(Vec<Cmd>);
+
+impl Pipeline {
+    pub(crate) fn new(cmds: Vec<Cmd>) -> Self {
+        Self(cmds)
+    }
 }
 
 /// A sequence of [Term]s separated by [ControlOp]s.

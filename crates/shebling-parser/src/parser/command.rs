@@ -364,7 +364,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
         )
     }
 
-    fn bin_expr<'a>(single_bracketed: bool) -> impl Fn(Span<'a>) -> ParseResult<CondBinExpr> {
+    fn bin_expr<'a>(single_bracketed: bool) -> impl Fn(Span<'a>) -> ParseResult<CondExpr> {
         move |span| {
             // Read the first argument.
             let (span, left) = cond_word(span)?;
@@ -410,7 +410,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
                 trivia,
             )(span)?;
 
-            Ok((span, CondBinExpr::new(left, right, op)))
+            Ok((span, BinExpr::new(left, right, op).into()))
         }
     }
 
@@ -447,9 +447,8 @@ fn cond(span: Span) -> ParseResult<Cond> {
     {
         // Parse >= 1 expressions and then apply the operator in a left associative way.
         map(pair(expr, many0(pair(op, expr))), |(head, tail)| {
-            tail.into_iter().fold(head, |acc, (op, expr)| {
-                CondBinExpr::new(acc, expr, op).into()
-            })
+            tail.into_iter()
+                .fold(head, |acc, (op, expr)| BinExpr::new(acc, expr, op).into())
         })
     }
 
@@ -568,7 +567,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
         Ok((span, CondOp::new(format!("-{}", flag))))
     }
 
-    fn group<'a>(single_bracketed: bool) -> impl FnMut(Span<'a>) -> ParseResult<CondGroup> {
+    fn group<'a>(single_bracketed: bool) -> impl FnMut(Span<'a>) -> ParseResult<CondExpr> {
         let paren = |p| {
             move |span| {
                 let (span, ((_, escaped), range)) = terminated(
@@ -598,7 +597,9 @@ fn cond(span: Span) -> ParseResult<Cond> {
 
         delimited(
             paren('('),
-            map(or(single_bracketed), CondGroup::new),
+            map(or(single_bracketed), |group| {
+                CondExpr::Group(Box::new(group))
+            }),
             paren(')'),
         )
     }
@@ -627,8 +628,8 @@ fn cond(span: Span) -> ParseResult<Cond> {
     ) -> impl FnMut(Span<'a>) -> ParseResult<CondExpr> {
         let expr = move |span| {
             alt((
-                into(group(single_bracketed)),
-                into(unary_expr(single_bracketed)),
+                group(single_bracketed),
+                unary_expr(single_bracketed),
                 bin_or_nullary_expr(single_bracketed),
             ))(span)
         };
@@ -638,7 +639,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
             alt((
                 map(
                     separated_pair(token(UnOp::Not), cond_space(true, single_bracketed), expr),
-                    |(op, expr)| CondUnExpr::new(expr, op).into(),
+                    |(op, expr)| UnExpr::new(expr, op).into(),
                 ),
                 expr,
             )),
@@ -753,7 +754,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
         ))(span)
     }
 
-    fn unary_expr<'a>(single_bracketed: bool) -> impl FnMut(Span<'a>) -> ParseResult<CondUnExpr> {
+    fn unary_expr<'a>(single_bracketed: bool) -> impl FnMut(Span<'a>) -> ParseResult<CondExpr> {
         map(
             separated_pair(
                 flag_op,
@@ -763,7 +764,7 @@ fn cond(span: Span) -> ParseResult<Cond> {
                     terminated(cond_word, trivia),
                 )),
             ),
-            |(op, expr)| CondUnExpr::new(expr, op),
+            |(op, expr)| UnExpr::new(expr, op).into(),
         )
     }
 
@@ -1602,32 +1603,41 @@ mod tests {
             cond("[ foo \\< bar ]"),
             Cond::new(
                 true,
-                Some(CondBinExpr::new(tests::word("foo"), tests::word("bar"), BinOp::Lt).into()),
+                Some(BinExpr::new(tests::word("foo"), tests::word("bar"), BinOp::Lt).into()),
             )
         );
         assert_parse!(
             cond("[ foo '<' bar ]"),
             Cond::new(
                 true,
-                Some(CondBinExpr::new(tests::word("foo"), tests::word("bar"), BinOp::Lt).into()),
+                Some(BinExpr::new(tests::word("foo"), tests::word("bar"), BinOp::Lt).into()),
             )
         );
 
         // Same with parentheses.
         assert_parse!(
             cond("[ '(' foo \\) ]"),
-            Cond::new(true, Some(CondGroup::new(tests::word("foo")).into()))
+            Cond::new(
+                true,
+                Some(CondExpr::Group(Box::new(tests::word("foo").into())))
+            )
         );
         // ...In fact, you have to do it inside single brackets.
         assert_parse!(
             cond("[ '(' foo ) ]"),
-            Cond::new(true, Some(CondGroup::new(tests::word("foo")).into())),
+            Cond::new(
+                true,
+                Some(CondExpr::Group(Box::new(tests::word("foo").into())))
+            ),
             [((1, 11), (1, 12), ParseDiagnosticKind::MissingEscape)]
         );
         // ...But in double brackets is wrong to do it.
         assert_parse!(
             cond("[[ '(' foo ) ]]"),
-            Cond::new(false, Some(CondGroup::new(tests::word("foo")).into())),
+            Cond::new(
+                false,
+                Some(CondExpr::Group(Box::new(tests::word("foo").into())))
+            ),
             [((1, 4), (1, 7), ParseDiagnosticKind::BadEscape)]
         );
 
