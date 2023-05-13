@@ -322,27 +322,24 @@ pub(super) fn brace_expansion(span: Span) -> ParseResult<Vec<Word>> {
     braced(span)
 }
 
-fn dollar_cmd_expansion(span: Span) -> ParseResult<DollarCmdExpansion> {
+fn dollar_cmd_expansion(span: Span) -> ParseResult<Term> {
     delimited(
         tuple((tag("${"), whitespace, multi_trivia)),
-        map(term, DollarCmdExpansion::new),
+        term,
         context("expected a closing }", char('}')),
     )(span)
 }
 
-fn dollar_cmd_sub(span: Span) -> ParseResult<DollarCmdSub> {
+fn dollar_cmd_sub(span: Span) -> ParseResult<Option<Term>> {
     delimited(
         pair(tag("$("), multi_trivia),
-        map(
-            alt((
-                // Parse the substitution, which can be empty.
-                map(peek(alt((char(')'), value(char::default(), eof)))), |_| {
-                    None
-                }),
-                map(term, Some),
-            )),
-            DollarCmdSub::new,
-        ),
+        alt((
+            // Parse the substitution, which can be empty.
+            map(peek(alt((char(')'), value(char::default(), eof)))), |_| {
+                None
+            }),
+            map(term, Some),
+        )),
         context("expected a closing )", char(')')),
     )(span)
 }
@@ -370,7 +367,7 @@ pub(super) fn dollar_exp(span: Span) -> ParseResult<DollarExp> {
             delimited(pair(char('$'), char('[')), into(arith_seq), char(']')),
             into(dollar_cmd_expansion),
             into(param_expansion),
-            into(dollar_var),
+            map(dollar_var, DollarExp::Var),
         )),
     )(span)
 }
@@ -380,14 +377,20 @@ pub(super) fn dollar_sgmt(span: Span) -> ParseResult<WordSgmt> {
         into(alt((
             dollar_exp,
             // $"" and $'' strings.
-            preceded(char('$'), alt((into(double_quoted), into(single_quoted)))),
+            preceded(
+                char('$'),
+                alt((
+                    into(double_quoted),
+                    map(single_quoted, DollarExp::SingleQuoting),
+                )),
+            ),
         ))),
         // A lonely dollar.
         map(char('$'), |c| WordSgmt::Lit(c.into())),
     ))(span)
 }
 
-fn dollar_var(span: Span) -> ParseResult<SubscriptedVar> {
+fn dollar_var(span: Span) -> ParseResult<String> {
     fn dollar_ident(span: Span) -> ParseResult<String> {
         let (span, ((ident, range), has_bracket)) =
             pair(ranged(identifier), followed_by(char('[')))(span)?;
@@ -422,14 +425,11 @@ fn dollar_var(span: Span) -> ParseResult<SubscriptedVar> {
 
     preceded(
         char('$'),
-        map(
-            alt((
-                dollar_digit,
-                recognize_string(one_of(SPECIAL_PARAMS)),
-                dollar_ident,
-            )),
-            |ident| SubscriptedVar::new(ident, vec![]),
-        ),
+        alt((
+            dollar_digit,
+            recognize_string(one_of(SPECIAL_PARAMS)),
+            dollar_ident,
+        )),
     )(span)
 }
 
@@ -453,28 +453,25 @@ pub(super) fn extglob(span: Span) -> ParseResult<String> {
     recognize_string(pair(one_of(EXTGLOB_PREFIX), group))(span)
 }
 
-fn param_expansion(span: Span) -> ParseResult<ParamExpansion> {
-    map(
-        delimited(
-            tag("${"),
-            many0(alt((
-                map(single_quoted, WordSgmt::SingleQuoted),
-                into(double_quoted),
-                map(extglob, WordSgmt::Glob),
-                dollar_sgmt,
-                map(backquoted, WordSgmt::BackQuoted),
-                map(
-                    // Literals, with maybe some escaped characters.
-                    many1(alt((
-                        escaped(BRACED_ESCAPABLE),
-                        recognize_string(is_not(&*format!("\\{}", BRACED_ESCAPABLE))),
-                    ))),
-                    |lits| WordSgmt::Lit(lits.concat()),
-                ),
-            ))),
-            char('}'),
-        ),
-        ParamExpansion::new,
+fn param_expansion(span: Span) -> ParseResult<Vec<WordSgmt>> {
+    delimited(
+        tag("${"),
+        many0(alt((
+            map(single_quoted, WordSgmt::SingleQuoted),
+            into(double_quoted),
+            map(extglob, WordSgmt::Glob),
+            dollar_sgmt,
+            map(backquoted, WordSgmt::BackQuoted),
+            map(
+                // Literals, with maybe some escaped characters.
+                many1(alt((
+                    escaped(BRACED_ESCAPABLE),
+                    recognize_string(is_not(&*format!("\\{}", BRACED_ESCAPABLE))),
+                ))),
+                |lits| WordSgmt::Lit(lits.concat()),
+            ),
+        ))),
+        char('}'),
     )(span)
 }
 
@@ -518,7 +515,7 @@ mod tests {
         assert_parse!(
             arith_seq("($x ** 2)"),
             vec![ArithTerm::Group(vec![BinExpr::new(
-                ArithTerm::Expansion(vec![DollarExp::Var(tests::var("x")).into()]),
+                ArithTerm::Expansion(vec![DollarExp::Var("x".into()).into()]),
                 tests::arith_number("2"),
                 BinOp::Pow,
             )
@@ -549,9 +546,9 @@ mod tests {
         assert_parse!(
             brace_expansion("{$x..$y}"),
             vec![Word::new(vec![
-                DollarExp::from(tests::var("x")).into(),
+                DollarExp::Var("x".into()).into(),
                 WordSgmt::Lit("..".into()),
-                DollarExp::from(tests::var("y")).into(),
+                DollarExp::Var("y".into()).into(),
             ])]
         );
 
@@ -589,7 +586,7 @@ mod tests {
         // The content can be any valid term.
         assert_parse!(
             dollar_cmd_expansion("${ foo; }"),
-            DollarCmdExpansion::new(tests::pipeline("foo"))
+            tests::pipeline("foo").into()
         );
 
         // The term needs to end with a semicolon, else the closing curly will be
@@ -609,11 +606,11 @@ mod tests {
         // The content can be any valid term.
         assert_parse!(
             dollar_cmd_sub("$( foo )"),
-            DollarCmdSub::new(Some(tests::pipeline("foo").into()))
+            Some(tests::pipeline("foo").into())
         );
         assert_parse!(
             dollar_cmd_sub("$(foo; ls 'bar')"),
-            DollarCmdSub::new(Some(
+            Some(
                 List::new(
                     tests::pipeline("foo"),
                     Pipeline::new(vec![SimpleCmd::new(
@@ -625,12 +622,12 @@ mod tests {
                     ControlOp::Semi
                 )
                 .into()
-            ))
+            )
         );
 
         // The content can be just trivia.
-        assert_parse!(dollar_cmd_sub("$( )"), DollarCmdSub::new(None));
-        assert_parse!(dollar_cmd_sub("$(\n#foo\n)"), DollarCmdSub::new(None));
+        assert_parse!(dollar_cmd_sub("$( )"), None);
+        assert_parse!(dollar_cmd_sub("$(\n#foo\n)"), None);
 
         // Missing parentheses.
         assert_parse!(dollar_cmd_sub("$)") => Err(1, 1));
@@ -645,17 +642,17 @@ mod tests {
     #[test]
     fn test_dollar_var() {
         // A dollar followed by an identifier is valid.
-        assert_parse!(dollar_var("$foo"), tests::var("foo"));
+        assert_parse!(dollar_var("$foo"), "foo");
 
         // If not an identifier, it must be a special parameter.
-        assert_parse!(dollar_var("$?"), tests::var("?"));
+        assert_parse!(dollar_var("$?"), "?");
 
         // Numerical variables are fine:
-        assert_parse!(dollar_var("$1"), tests::var("1"));
+        assert_parse!(dollar_var("$1"), "1");
         // ...but if they're multi-digit we emit a diagnostic.
         assert_parse!(
             dollar_var("$123") => "23",
-            tests::var("1"),
+            "1",
             [((1, 2), (1, 5), ParseDiagnosticKind::Unbraced)]
         );
 
@@ -677,19 +674,19 @@ mod tests {
         // The closing brace can be escaped.
         assert_parse!(
             param_expansion("${foo\\}}"),
-            ParamExpansion::new(vec![WordSgmt::Lit("foo}".into())])
+            vec![WordSgmt::Lit("foo}".into())]
         );
 
         // We can have nested dollar expressions.
         assert_parse!(
             param_expansion("${foo$(bar)}"),
-            ParamExpansion::new(vec![
+            vec![
                 WordSgmt::Lit("foo".into()),
-                DollarExp::CmdSub(DollarCmdSub::new(Some(tests::pipeline("bar").into()))).into()
-            ])
+                DollarExp::CmdSub(Some(tests::pipeline("bar").into())).into()
+            ]
         );
 
         // Can be empty.
-        assert_parse!(param_expansion("${}"), ParamExpansion::new(vec![]));
+        assert_parse!(param_expansion("${}"), vec![]);
     }
 }

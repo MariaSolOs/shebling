@@ -1,3 +1,1 @@
-function foo() {
-    echo $"foo"'foo'$((1+1));
-}
+(y -lt 0)

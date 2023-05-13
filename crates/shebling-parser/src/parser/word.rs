@@ -509,7 +509,7 @@ mod tests {
             Word::new(vec![
                 WordSgmt::SingleQuoted("foo".into()),
                 WordSgmt::Glob("*".into()),
-                DollarExp::Var(tests::var("bar")).into()
+                DollarExp::Var("bar".into()).into()
             ])
         );
 

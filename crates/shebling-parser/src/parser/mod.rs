@@ -50,10 +50,10 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    match function(source_to_span(source_code)).finish() {
+    match arith_seq(source_to_span(source_code)).finish() {
         Ok((span, res)) => {
-            println!("{:#?}", span);
-            println!("{:#?}", res);
+            println!("OK SPAN {:#?}", span);
+            println!("OK RES {:#?}", res);
             let diags: Vec<ParseDiagnostic> = span.extra.take_diags();
 
             let source_code = Arc::new(miette::NamedSource::new(
@@ -68,7 +68,7 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
             }
         }
         Err(err) => {
-            println!("{:#?}", err);
+            println!("ERR {:#?}", err);
             let diags = err.diags();
             let source_code = Arc::new(miette::NamedSource::new(
                 file_path,

@@ -305,10 +305,9 @@ mod tests {
         // Can have complex stuff like dollar expansions.
         assert_parse!(
             double_quoted("\"${ foo; }\""),
-            DoubleQuoted::new(vec![DollarExp::CmdExpansion(DollarCmdExpansion::new(
-                tests::pipeline("foo")
-            ))
-            .into()])
+            DoubleQuoted::new(vec![
+                DollarExp::CmdExpansion(tests::pipeline("foo").into()).into()
+            ])
         );
 
         // Using uniquotes.

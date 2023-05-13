@@ -1,9 +1,6 @@
 use derive_more::From;
 use shebling_codegen::New;
 
-// TODO: Document each type.
-// TODO: Simplify.
-
 // region: Tokens.
 /// Trait for types that represent single tokens, such as keywords
 /// and operators.
@@ -232,29 +229,30 @@ pub(crate) struct ArithTriExpr {
 // region: Shell expansions.
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum DollarExp {
+    /// Arithmetic expansion. Can happen inside `$(())` or `$[]`.
     Arith(ArithSeq),
-    CmdExpansion(DollarCmdExpansion),
-    CmdSub(DollarCmdSub),
+
+    /// `ksh`-style command expansion (e.g. `${ foo; }`).
+    CmdExpansion(Term),
+
+    /// Dollar-prefixed command substitution (e.g. `$(foo)`).
+    ///
+    /// The contained [Term] will be [None] iff the command substitution is `$()`.
+    CmdSub(Option<Term>),
+
+    /// `$""` expression, used for locale-specific translation.
     DoubleQuoting(DoubleQuoted),
-    ParamExpansion(ParamExpansion),
+
+    /// Shell parameter expansion (e.g. `${!foo[@]}`).
+    ParamExpansion(Vec<WordSgmt>),
+
+    /// `$''` expression, used for ANSI-C quoting.
+    #[from(ignore)]
     SingleQuoting(String),
-    Var(SubscriptedVar),
-}
 
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct DollarCmdExpansion {
-    #[new(into)]
-    cmd: Term,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct DollarCmdSub {
-    cmd: Option<Term>,
-}
-
-#[derive(Debug, New, PartialEq)]
-pub struct ParamExpansion {
-    sgmts: Vec<WordSgmt>,
+    /// A variable.
+    #[from(ignore)]
+    Var(String),
 }
 // endregion
 
