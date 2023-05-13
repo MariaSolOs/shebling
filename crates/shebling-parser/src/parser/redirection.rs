@@ -8,9 +8,7 @@ pub(super) fn redir(span: Span) -> ParseResult<Redir> {
             map(
                 alt((
                     map(char('&'), |_| FileDesc::StdOutErr),
-                    map(delimited(char('{'), identifier, char('}')), |ident| {
-                        SubscriptedVar::new(ident, vec![]).into()
-                    }),
+                    into(delimited(char('{'), identifier, char('}'))),
                     map(digit1, |_| FileDesc::Number),
                 )),
                 Some,
@@ -89,7 +87,7 @@ mod tests {
         assert_parse!(
             redir("{foo}>&1-"),
             Redir::new(
-                Some(tests::var("foo").into()),
+                Some(FileDesc::Var("foo".into())),
                 RedirOp::GreatAnd,
                 tests::word("1-"),
             )
@@ -97,7 +95,7 @@ mod tests {
         assert_parse!(
             redir("{foo}>&{bar}"),
             Redir::new(
-                Some(tests::var("foo").into()),
+                Some(FileDesc::Var("foo".into())),
                 RedirOp::GreatAnd,
                 tests::word("bar"),
             )

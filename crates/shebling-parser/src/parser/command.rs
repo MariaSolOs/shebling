@@ -821,7 +821,7 @@ fn cond_block<'a>(keyword: Keyword) -> impl FnMut(Span<'a>) -> ParseResult<CondB
 
 fn cond_cmd(span: Span) -> ParseResult<CompoundCmd> {
     // Read the condition and suffix redirections.
-    let (span, (cond, redirs)) = pair(into(cond), many0(redir))(span)?;
+    let (span, (cond, redirs)) = pair(cond, many0(redir))(span)?;
 
     // || or && should be used between test conditions.
     let (span, cond_op) = opt(peek(ranged(consumed(alt((
@@ -1722,15 +1722,12 @@ mod tests {
         // Valid condition commands.
         assert_parse!(
             cond_cmd("[[ foo ]]"),
-            CompoundCmd::new(
-                Cond::new(false, Some(tests::word("foo").into())).into(),
-                vec![]
-            )
+            CompoundCmd::new(Cond::new(false, Some(tests::word("foo").into())), vec![])
         );
         assert_parse!(
             cond_cmd("[ foo ] > bar"),
             CompoundCmd::new(
-                Cond::new(true, Some(tests::word("foo").into())).into(),
+                Cond::new(true, Some(tests::word("foo").into())),
                 vec![Redir::new(None, RedirOp::Great, tests::word("bar"))]
             )
         );
@@ -1738,7 +1735,7 @@ mod tests {
         // Wrong operator between conditions.
         assert_parse!(
             cond_cmd("[ foo ] -a [ bar ]") => "-a [ bar ]",
-            CompoundCmd::new(Cond::new(true, Some(tests::word("foo").into())).into(), vec![]),
+            CompoundCmd::new(Cond::new(true, Some(tests::word("foo").into())), vec![]),
             [((1, 9), (1, 11), ParseDiagnosticKind::BadOperator)]
         );
 
@@ -1746,7 +1743,7 @@ mod tests {
         assert_parse!(
             cond_cmd("[ foo ] [ bar ]") => "[ bar ]",
             CompoundCmd::new(
-                Cond::new(true, Some(tests::word("foo").into())).into(),
+                Cond::new(true, Some(tests::word("foo").into())),
                 vec![],
             ),
             [((1, 9), (1, 10), ParseDiagnosticKind::SusToken)]
@@ -1905,7 +1902,7 @@ mod tests {
                 vec![],
                 Some(
                     Pipeline::new(vec![CompoundCmd::new(
-                        Construct::If(IfCmd::new(if_block("2", "bar"), vec![], None)),
+                        IfCmd::new(if_block("2", "bar"), vec![], None),
                         vec![]
                     )
                     .into()])
@@ -1922,7 +1919,7 @@ mod tests {
                 vec![],
                 Some(
                     Pipeline::new(vec![CompoundCmd::new(
-                        Construct::If(IfCmd::new(if_block("2", "bar"), vec![], None)),
+                        IfCmd::new(if_block("2", "bar"), vec![], None),
                         vec![]
                     )
                     .into()])

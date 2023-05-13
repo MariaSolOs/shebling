@@ -1,4 +1,5 @@
 // TODO: Remove all the #[allow(..)] after development.
+// TODO: Document.
 #![allow(dead_code)]
 
 mod ast;
@@ -7,20 +8,24 @@ mod error;
 mod location;
 mod parser;
 
-use shebling_codegen::New;
 use std::cell::RefCell;
 
 use diagnostic::{ParseDiagnostic, ParseDiagnosticBuilder};
 use location::Span;
 
 // region: Parsing context.
-#[derive(Clone, Debug, New)]
+#[derive(Clone, Debug)]
 struct ParseContext {
-    #[new(default)]
     diags: RefCell<Vec<ParseDiagnostic>>,
 }
 
 impl ParseContext {
+    fn new() -> Self {
+        Self {
+            diags: RefCell::new(Vec::new()),
+        }
+    }
+
     fn diag(&self, builder: ParseDiagnosticBuilder) {
         self.diags.borrow_mut().push(builder.build());
     }

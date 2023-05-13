@@ -1,5 +1,4 @@
 use derive_more::From;
-use shebling_codegen::New;
 
 // region: Tokens.
 /// Trait for types that represent single tokens, such as keywords
@@ -145,14 +144,22 @@ tokenizable! {
 }
 
 /// A binary expression (e.g. `$x + 1`).
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct BinExpr<O, L, R = L> {
-    #[new(into)]
     left: Box<L>,
-    #[new(into)]
     right: Box<R>,
-    #[new(into)]
     op: O,
+}
+
+impl<O, L, R> BinExpr<O, L, R> {
+    /// Creates a new binary expression.
+    pub(crate) fn new(left: impl Into<L>, right: impl Into<R>, op: impl Into<O>) -> Self {
+        Self {
+            left: Box::new(left.into()),
+            right: Box::new(right.into()),
+            op: op.into(),
+        }
+    }
 }
 
 tokenizable! {
@@ -179,12 +186,20 @@ tokenizable! {
 }
 
 /// A unary expression (e.g. `++x`).
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct UnExpr<O, E> {
-    #[new(into)]
     expr: Box<E>,
-    #[new(into)]
     op: O,
+}
+
+impl<O, E> UnExpr<O, E> {
+    /// Creates a new unary expression.
+    pub(crate) fn new(expr: impl Into<E>, op: impl Into<O>) -> Self {
+        Self {
+            expr: Box::new(expr.into()),
+            op: op.into(),
+        }
+    }
 }
 // endregion
 
@@ -215,14 +230,26 @@ pub(crate) type ArithSeq = Vec<ArithTerm>;
 
 /// An arithmetic ternary expression of the form
 /// `condition ? true_branch : else_branch`.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct ArithTriExpr {
-    #[new(into)]
     cond: Box<ArithTerm>,
-    #[new(into)]
     then_branch: Box<ArithTerm>,
-    #[new(into)]
     else_branch: Box<ArithTerm>,
+}
+
+impl ArithTriExpr {
+    /// Creates a new arithmetic ternary expression.
+    pub(crate) fn new(
+        cond: impl Into<ArithTerm>,
+        then_branch: impl Into<ArithTerm>,
+        else_branch: impl Into<ArithTerm>,
+    ) -> Self {
+        Self {
+            cond: Box::new(cond.into()),
+            then_branch: Box::new(then_branch.into()),
+            else_branch: Box::new(else_branch.into()),
+        }
+    }
 }
 // endregion
 
@@ -342,9 +369,14 @@ pub(crate) enum WordSgmt {
 }
 
 /// A sequence of [word segments][DoubleQuotedSgmt] enclosed in `""`.
-#[derive(Debug, New, PartialEq)]
-pub(crate) struct DoubleQuoted {
-    sgmts: Vec<DoubleQuotedSgmt>,
+#[derive(Debug, PartialEq)]
+pub(crate) struct DoubleQuoted(Vec<DoubleQuotedSgmt>);
+
+impl DoubleQuoted {
+    /// Creates a new double-quoted string.
+    pub(crate) fn new(sgmts: Vec<DoubleQuotedSgmt>) -> Self {
+        Self(sgmts)
+    }
 }
 
 #[derive(Debug, From, PartialEq)]
@@ -354,21 +386,46 @@ pub(crate) enum DoubleQuotedSgmt {
     DollarExp(DollarExp),
 }
 
-#[derive(Debug, New, PartialEq)]
+/// A subscripted variable, used for indexing into [Array]s.
+#[derive(Debug, PartialEq)]
 pub(crate) struct SubscriptedVar {
-    #[new(into)]
     ident: String,
     // Left unparsed for now.
     subscripts: Vec<String>,
 }
 
+impl SubscriptedVar {
+    /// Creates a new subscripted variable with the given identifier
+    /// and subscripts.
+    pub(crate) fn new(ident: impl Into<String>, subscripts: Vec<String>) -> Self {
+        Self {
+            ident: ident.into(),
+            subscripts,
+        }
+    }
+}
+
 /// A variable assignment (e.g. `foo='bar'`).
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Assign {
     var: SubscriptedVar,
-    #[new(into)]
     value: Value,
     op: BinOp,
+}
+
+impl Assign {
+    /// Creates a new variable assignment, where `value` is assigned
+    /// to `var`.
+    ///
+    /// The assignment can be a compound assignment when `op` is different
+    /// from [=](BinOp::Eq) (e.g. `x+=1`).
+    pub(crate) fn new(var: SubscriptedVar, value: impl Into<Value>, op: BinOp) -> Self {
+        Self {
+            var,
+            value: value.into(),
+            op,
+        }
+    }
 }
 
 /// An assignment's value.
@@ -392,11 +449,20 @@ impl Array {
 }
 
 /// [Array] element of the form `arr[subscript]=value`.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct KeyValue {
     key: Vec<String>,
-    #[new(into)]
     value: Box<Value>,
+}
+
+impl KeyValue {
+    /// Creates a new array [key-value element](KeyValue).
+    pub(crate) fn new(key: Vec<String>, value: impl Into<Value>) -> Self {
+        Self {
+            key,
+            value: Box::new(value.into()),
+        }
+    }
 }
 // endregion
 
@@ -457,10 +523,20 @@ pub(crate) enum CondExpr {
 }
 
 /// Conditional expression enclosed in `[..]` or `[[..]]`.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Cond {
     single_bracketed: bool,
     expr: Option<CondExpr>,
+}
+
+impl Cond {
+    /// Creates a new conditional expression.
+    pub(crate) fn new(single_bracketed: bool, expr: Option<CondExpr>) -> Self {
+        Self {
+            single_bracketed,
+            expr,
+        }
+    }
 }
 // endregion
 
@@ -486,16 +562,27 @@ tokenizable! {
 pub(crate) enum FileDesc {
     Number,
     StdOutErr,
-    Var(SubscriptedVar),
+    Var(String),
 }
 
 /// Shell redirection, used to change the files a [command](Cmd) reads
 /// and writes to.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Redir {
     file_desc: Option<FileDesc>,
     op: RedirOp,
     word: Word,
+}
+
+impl Redir {
+    /// Creates a new redirection.
+    pub(crate) fn new(file_desc: Option<FileDesc>, op: RedirOp, word: Word) -> Self {
+        Self {
+            file_desc,
+            op,
+            word,
+        }
+    }
 }
 // endregion
 
@@ -510,28 +597,62 @@ pub(crate) enum Cmd {
 
 /// [Command](Cmd) beginning with a particular [Keyword] and formed by
 /// a shell programming language construct.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CompoundCmd {
     cmd: Construct,
     redirs: Vec<Redir>,
 }
 
-/// [Command](Cmd) preceded by ["coproc"](Keyword::Coproc). A [coprocess](Coproc)
+impl CompoundCmd {
+    /// Creates a new compound command.
+    pub(crate) fn new(cmd: impl Into<Construct>, redirs: Vec<Redir>) -> Self {
+        Self {
+            cmd: cmd.into(),
+            redirs,
+        }
+    }
+}
+
+/// [Command](Cmd) preceded by [`coproc`](Keyword::Coproc). A [coprocess](Coproc)
 /// is executed asynchronously in a subshell.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Coproc {
     name: Option<String>,
-    #[new(into)]
     cmd: Box<Cmd>,
+}
+
+impl Coproc {
+    /// Creates a new coprocess.
+    pub(crate) fn new(name: Option<String>, cmd: impl Into<Cmd>) -> Self {
+        Self {
+            name,
+            cmd: Box::new(cmd.into()),
+        }
+    }
 }
 
 /// Sequence of [Word]s separated by blanks, terminated by a
 /// [control operator](ControlOp).
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct SimpleCmd {
     cmd: Option<Word>,
     prefix: Vec<CmdPrefixSgmt>,
     suffix: Vec<CmdSuffixSgmt>,
+}
+
+impl SimpleCmd {
+    /// Creates a new simple command.
+    pub(crate) fn new(
+        cmd: Option<Word>,
+        prefix: Vec<CmdPrefixSgmt>,
+        suffix: Vec<CmdSuffixSgmt>,
+    ) -> Self {
+        Self {
+            cmd,
+            prefix,
+            suffix,
+        }
+    }
 }
 
 /// A [Word] that precedes the command in a [simple command](SimpleCmd).
@@ -610,19 +731,33 @@ pub(crate) enum Construct {
     While(CondBlock),
 }
 
-/// Conditional command construct beginning with ["case"](Keyword::Case).
-#[derive(Debug, New, PartialEq)]
+/// Conditional command construct beginning with [`case`](Keyword::Case).
+#[derive(Debug, PartialEq)]
 pub(crate) struct CaseCmd {
     word: Word,
     clauses: Vec<CaseClause>,
 }
 
+impl CaseCmd {
+    /// Creates a new case command.
+    pub(crate) fn new(word: Word, clauses: Vec<CaseClause>) -> Self {
+        Self { word, clauses }
+    }
+}
+
 /// Clause in a [case command](CaseCmd).
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CaseClause {
     pattern: Vec<Word>,
     cmd: Option<Term>,
     sep: Option<ClauseSep>,
+}
+
+impl CaseClause {
+    /// Creates a new [case clause](CaseClause).
+    pub(crate) fn new(pattern: Vec<Word>, cmd: Option<Term>, sep: Option<ClauseSep>) -> Self {
+        Self { pattern, cmd, sep }
+    }
 }
 
 tokenizable! {
@@ -648,46 +783,95 @@ pub(crate) enum ForLoop {
 }
 
 /// Arithmetic, `C`-style [for-loop](ForLoop).
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct ArithForLoop {
     header: (ArithSeq, ArithSeq, ArithSeq),
-    #[new(into)]
     body: Term,
+}
+
+impl ArithForLoop {
+    /// Creates a new arithmetic for-loop.
+    pub(crate) fn new(header: (ArithSeq, ArithSeq, ArithSeq), body: impl Into<Term>) -> Self {
+        Self {
+            header,
+            body: body.into(),
+        }
+    }
 }
 
 /// Group of commands with a `name in lists` header.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct InListed {
-    #[new(into)]
     name: String,
     list: Vec<Word>,
-    #[new(into)]
     body: Term,
+}
+
+impl InListed {
+    /// Creates a new group of commands to be executed in an `in lists` loop.
+    pub(crate) fn new(name: impl Into<String>, list: Vec<Word>, body: impl Into<Term>) -> Self {
+        Self {
+            name: name.into(),
+            list,
+            body: body.into(),
+        }
+    }
 }
 
 /// Group of commands that can be later executed by its name.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Function {
-    #[new(into)]
     name: String,
-    #[new(into)]
     body: Term,
 }
 
-/// Conditional command construct beginning with ["if"](Keyword::If).
-#[derive(Debug, New, PartialEq)]
+impl Function {
+    /// Creates a new function.
+    pub(crate) fn new(name: impl Into<String>, body: impl Into<Term>) -> Self {
+        Self {
+            name: name.into(),
+            body: body.into(),
+        }
+    }
+}
+
+/// Conditional command construct beginning with [`if`](Keyword::If).
+#[derive(Debug, PartialEq)]
 pub(crate) struct IfCmd {
     if_branch: CondBlock,
     elif_branches: Vec<CondBlock>,
     else_term: Option<Term>,
 }
 
+impl IfCmd {
+    /// Creates a new `if` command.
+    pub(crate) fn new(
+        if_branch: CondBlock,
+        elif_branches: Vec<CondBlock>,
+        else_term: Option<Term>,
+    ) -> Self {
+        Self {
+            if_branch,
+            elif_branches,
+            else_term,
+        }
+    }
+}
+
 /// Conditional block of commands that is executed when its condition is met.
-#[derive(Debug, New, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CondBlock {
-    #[new(into)]
     cond: Term,
-    #[new(into)]
     block: Term,
+}
+
+impl CondBlock {
+    /// Creates a new conditional block.
+    pub(crate) fn new(cond: impl Into<Term>, block: impl Into<Term>) -> Self {
+        Self {
+            cond: cond.into(),
+            block: block.into(),
+        }
+    }
 }
 // endregion

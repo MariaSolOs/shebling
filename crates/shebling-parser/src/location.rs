@@ -1,4 +1,3 @@
-use shebling_codegen::New;
 use std::borrow::Borrow;
 
 use crate::ParseContext;
@@ -55,15 +54,21 @@ impl From<Location> for miette::SourceSpan {
     }
 }
 
-#[derive(Clone, Copy, Debug, New)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Range {
-    #[new(into)]
     start: Location,
-    #[new(into)]
     end: Location,
 }
 
 impl Range {
+    /// Creates a new range from the given start and end locations.
+    pub(crate) fn new(start: impl Into<Location>, end: impl Into<Location>) -> Self {
+        Self {
+            start: start.into(),
+            end: end.into(),
+        }
+    }
+
     /// Returns the start location of the range.
     pub(crate) fn start(&self) -> &Location {
         &self.start

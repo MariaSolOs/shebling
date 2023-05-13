@@ -486,7 +486,7 @@ mod tests {
         assert_parse!(arith_seq("0"), vec![tests::arith_number("0").into()]);
         assert_parse!(
             arith_seq("!!0"),
-            vec![UnExpr::new(UnExpr::new(tests::arith_number("0"), UnOp::Not), UnOp::Not,).into()]
+            vec![UnExpr::new(UnExpr::new(tests::arith_number("0"), UnOp::Not), UnOp::Not).into()]
         );
 
         // Pre and post increments and decrements.
