@@ -90,7 +90,6 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
 }
 
 // region: Shared utility parsers.
-// TODO: Check if I'm not really using some of these.
 fn followed_by<'a, P, R>(parser: P) -> impl FnMut(Span<'a>) -> ParseResult<bool>
 where
     P: FnMut(Span<'a>) -> ParseResult<R>,

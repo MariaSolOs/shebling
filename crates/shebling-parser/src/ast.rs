@@ -714,6 +714,8 @@ pub(crate) type List = BinExpr<ControlOp, Term>;
 /// [compound command](CompoundCmd).
 #[derive(Debug, From, PartialEq)]
 pub(crate) enum Construct {
+    #[from]
+    ArithSeq(ArithSeq),
     BatsTest(Function),
     BraceGroup(Term),
     #[from]

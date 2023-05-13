@@ -110,6 +110,10 @@ impl ParseDiagnosticBuilder {
 // TODO: Combine/separate diagnostics.
 #[derive(Clone, Debug, Error, miette::Diagnostic)]
 pub(crate) enum ParseDiagnosticKind {
+    #[error("Ambiguous command!")]
+    #[diagnostic(code(shebling::parser::ambiguous))]
+    Ambiguous,
+
     #[error("Bad escaping!")]
     #[diagnostic(code(shebling::parser::bad_escape))]
     BadEscape,

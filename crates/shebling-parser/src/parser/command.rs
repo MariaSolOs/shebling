@@ -322,11 +322,39 @@ fn cmd(span: Span) -> ParseResult<Cmd> {
 }
 
 fn compound_cmd(span: Span) -> ParseResult<CompoundCmd> {
+    fn ambiguous_parens(span: Span) -> ParseResult<Construct> {
+        // (( starts either an arithmetic expression or opens a subshell.
+        let (span, (_, paren_range)) = peek(ranged(tag("((")))(span)?;
+
+        // Try parsing an arithmetic expression. All good if it succeeds.
+        let (span, seq) = opt(delimited(tag("(("), arith_seq, tag("))")))(span)?;
+        if let Some(seq) = seq {
+            return Ok((span, seq.into()));
+        }
+
+        // Else try parsing a subshell. If it succeeds, the prefix is ambiguous.
+        let (span, subshell) = opt(subshell)(span)?;
+        if let Some(subshell) = subshell {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::Ambiguous)
+                    .label("ambiguous parens", paren_range)
+                    .help("If you want a subshell, space the parentheses."),
+            );
+
+            return Ok((span, Construct::Subshell(subshell)));
+        }
+
+        cut(context(
+            "invalid arithmetic expression!",
+            into(delimited(tag("(("), arith_seq, tag("))"))),
+        ))(span)
+    }
+
     // Read the command and suffix redirections.
     let (span, (cmd, redirs)) = pair(
         alt((
             map(brace_group, Construct::BraceGroup),
-            // TODO: readAmbiguous "((" readArithmeticExpression readSubshell and consider error 1105
+            ambiguous_parens,
             map(subshell, Construct::Subshell),
             map(cond_block(Keyword::While), Construct::While),
             map(cond_block(Keyword::Until), Construct::Until),
@@ -1592,6 +1620,8 @@ mod tests {
                 vec![Redir::new(None, RedirOp::Great, tests::word("bar"))],
             )
         );
+
+        // TODO: Test for ambiguous ((..)).
     }
 
     #[test]
