@@ -483,58 +483,58 @@ mod tests {
     #[test]
     fn test_arith_seq() {
         // A single digit is fine.
-        assert_parse!(arith_seq("0"), vec![tests::arith_number("0").into()]);
+        assert_parse!(arith_seq("0"), vinto![tests::arith_number("0")]);
         assert_parse!(
             arith_seq("!!0"),
-            vec![UnExpr::new(UnExpr::new(tests::arith_number("0"), UnOp::Not), UnOp::Not).into()]
+            vinto![UnExpr::new(
+                UnExpr::new(tests::arith_number("0"), UnOp::Not),
+                UnOp::Not
+            )]
         );
 
         // Pre and post increments and decrements.
         assert_parse!(
             arith_seq("x++ + --y"),
-            vec![BinExpr::new(
+            vinto![BinExpr::new(
                 UnExpr::new(tests::var("x"), UnOp::Inc),
                 UnExpr::new(tests::var("y"), UnOp::Dec),
                 BinOp::Add
-            )
-            .into()]
+            )]
         );
 
         // Trinary conditions with weird spacing.
         assert_parse!(
             arith_seq("a?\\\nb:c?\td : e"),
-            vec![ArithTriExpr::new(
+            vinto![ArithTriExpr::new(
                 tests::var("a"),
                 tests::var("b"),
                 ArithTriExpr::new(tests::var("c"), tests::var("d"), tests::var("e")),
-            )
-            .into()]
+            )]
         );
 
         // Groups and dollar expressions.
         assert_parse!(
             arith_seq("($x ** 2)"),
-            vec![ArithTerm::Group(vec![BinExpr::new(
-                ArithTerm::Expansion(vec![DollarExp::Var("x".into()).into()]),
+            vec![ArithTerm::Group(vinto![BinExpr::new(
+                ArithTerm::Expansion(vinto![DollarExp::Var("x".into())]),
                 tests::arith_number("2"),
                 BinOp::Pow,
-            )
-            .into()])]
+            )])]
         );
 
         // A list of assignments.
         assert_parse!(
             arith_seq("x+=1, y<<=2"),
-            vec![
-                BinExpr::new(tests::var("x"), tests::arith_number("1"), BinOp::AddEq).into(),
-                BinExpr::new(tests::var("y"), tests::arith_number("2"), BinOp::ShlEq).into()
+            vinto![
+                BinExpr::new(tests::var("x"), tests::arith_number("1"), BinOp::AddEq),
+                BinExpr::new(tests::var("y"), tests::arith_number("2"), BinOp::ShlEq)
             ]
         );
 
         // Lint for using a test operator inside math stuff.
         assert_parse!(
             arith_seq("x -lt"),
-            vec![BinExpr::new(tests::var("x"), tests::var("lt"), BinOp::Sub).into()],
+            vinto![BinExpr::new(tests::var("x"), tests::var("lt"), BinOp::Sub)],
             [((1, 3), (1, 6), ParseDiagnosticKind::BadOperator)]
         );
     }
@@ -545,10 +545,10 @@ mod tests {
         assert_parse!(brace_expansion("{1..5}"), vec![tests::word("1..5")]);
         assert_parse!(
             brace_expansion("{$x..$y}"),
-            vec![Word::new(vec![
-                DollarExp::Var("x".into()).into(),
+            vec![Word::new(vinto![
+                DollarExp::Var("x".into()),
                 WordSgmt::Lit("..".into()),
-                DollarExp::Var("y".into()).into(),
+                DollarExp::Var("y".into())
             ])]
         );
 
@@ -563,7 +563,7 @@ mod tests {
             brace_expansion("{foo.{txt,md}}"),
             vec![Word::new(vec![
                 WordSgmt::Lit("foo.".into()),
-                WordSgmt::BraceExpansion(vec![tests::word("txt"), tests::word("md")]).into()
+                WordSgmt::BraceExpansion(vec![tests::word("txt"), tests::word("md")])
             ])]
         );
 
@@ -613,12 +613,11 @@ mod tests {
             Some(
                 List::new(
                     tests::pipeline("foo"),
-                    Pipeline::new(vec![SimpleCmd::new(
+                    Pipeline::new(vinto![SimpleCmd::new(
                         Some(tests::word("ls")),
                         vec![],
-                        vec![Word::new(vec![WordSgmt::SingleQuoted("bar".into())]).into()],
-                    )
-                    .into()]),
+                        vinto![Word::new(vec![WordSgmt::SingleQuoted("bar".into())])],
+                    )]),
                     ControlOp::Semi
                 )
                 .into()
@@ -680,9 +679,9 @@ mod tests {
         // We can have nested dollar expressions.
         assert_parse!(
             param_expansion("${foo$(bar)}"),
-            vec![
+            vinto![
                 WordSgmt::Lit("foo".into()),
-                DollarExp::CmdSub(Some(tests::pipeline("bar").into())).into()
+                DollarExp::CmdSub(Some(tests::pipeline("bar").into()))
             ]
         );
 

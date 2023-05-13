@@ -499,6 +499,7 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "thiserror",
+ "wec",
 ]
 
 [[package]]
@@ -643,6 +644,12 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
+
+[[package]]
+name = "wec"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec270f1f0267042ef5d80d6a4f04ecb28ec6ec55f18fef0f045405bf49f0703e"
 
 [[package]]
 name = "winapi"

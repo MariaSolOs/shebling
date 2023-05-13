@@ -108,7 +108,7 @@ fn bracketed_glob(span: Span) -> ParseResult<String> {
             pair(
                 opt(one_of("!^")),
                 alt((
-                    map(char(']'), |c| vec![c.into()]),
+                    map(char(']'), |c| vinto![c]),
                     many1(alt((
                         // A POSIX character class.
                         recognize_string(delimited(tag("[:"), alpha1, tag(":]"))),
@@ -340,25 +340,24 @@ mod tests {
         // Values can be key-value pairs, arrays, or words.
         assert_parse!(
             array("( [foo]=(bar) )"),
-            Array::new(vec![KeyValue::new(
-                vec!["foo".into()],
-                Array::new(vec![tests::word("bar").into()]),
-            )
-            .into()])
+            Array::new(vinto![KeyValue::new(
+                vinto!["foo"],
+                Array::new(vinto![tests::word("bar")]),
+            )])
         );
         assert_parse!(
             array("( foo bar )"),
-            Array::new(vec![tests::word("foo").into(), tests::word("bar").into()])
+            Array::new(vinto![tests::word("foo"), tests::word("bar")])
         );
         assert_parse!(
             array("( (foo) )"),
-            Array::new(vec![Array::new(vec![tests::word("foo").into()]).into()])
+            Array::new(vinto![Array::new(vinto![tests::word("foo")])])
         );
 
         // Looks like a multi-dimensional array.
         assert_parse!(
             array("((foo))"),
-            Array::new(vec![Array::new(vec![tests::word("foo").into()]).into()]),
+            Array::new(vinto![Array::new(vinto![tests::word("foo")])]),
             [((1, 1), (1, 3), ParseDiagnosticKind::SusValue)]
         );
 
@@ -376,7 +375,7 @@ mod tests {
         assert_parse!(
             assign("arr[0]='foo'"),
             Assign::new(
-                SubscriptedVar::new("arr", vec!["0".into()]),
+                SubscriptedVar::new("arr", vinto!["0"]),
                 Word::new(vec![WordSgmt::SingleQuoted("foo".into())]),
                 BinOp::Eq,
             )
@@ -385,7 +384,7 @@ mod tests {
             assign("foo=(bar baz)"),
             Assign::new(
                 tests::var("foo"),
-                Array::new(vec![tests::word("bar").into(), tests::word("baz").into()]),
+                Array::new(vinto![tests::word("bar"), tests::word("baz")]),
                 BinOp::Eq,
             )
         );

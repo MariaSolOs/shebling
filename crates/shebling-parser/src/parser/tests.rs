@@ -1,4 +1,5 @@
 use crate::ast::*;
+use wec::vinto;
 
 macro_rules! assert_diag_eq {
     ($diag:expr, (($line:literal, $col:literal), $kind:path)) => {
@@ -115,7 +116,7 @@ pub(crate) fn cmd(lit: &str) -> SimpleCmd {
 }
 
 pub(crate) fn pipeline(lit: &str) -> Pipeline {
-    Pipeline::new(vec![cmd(lit).into()])
+    Pipeline::new(vinto![cmd(lit)])
 }
 
 pub(crate) fn word(lit: &str) -> Word {

@@ -1291,7 +1291,7 @@ fn simple_cmd(span: Span) -> ParseResult<SimpleCmd> {
                     many0(delimited(peek(char('-')), word, trivia)),
                     // Parse the input pipeline, if any.
                     map(opt(pipeline), |pipeline| {
-                        pipeline.map_or(vec![], |pipeline| vec![pipeline.into()])
+                        pipeline.map_or(vec![], |pipeline| vinto![pipeline])
                     }),
                 )(span)?,
                 _ => many0(alt((into(redir), into(terminated(word, trivia)))))(span)?,
@@ -1773,11 +1773,7 @@ mod tests {
             coproc("coproc foo bar"),
             Coproc::new(
                 None,
-                SimpleCmd::new(
-                    Some(tests::word("foo")),
-                    vec![],
-                    vec![tests::word("bar").into()]
-                )
+                SimpleCmd::new(Some(tests::word("foo")), vec![], vinto![tests::word("bar")])
             )
         );
     }
@@ -1787,11 +1783,10 @@ mod tests {
         // Warn about 'do;s'.
         assert_parse!(
             do_group("do; { foo; } done"),
-            Pipeline::new(vec![CompoundCmd::new(
+            Pipeline::new(vinto![CompoundCmd::new(
                 Construct::BraceGroup(tests::pipeline("foo").into()),
                 vec![],
-            )
-            .into()])
+            )])
             .into(),
             [((1, 3), (1, 4), ParseDiagnosticKind::BadOperator)]
         );
@@ -1799,11 +1794,11 @@ mod tests {
         // Looks like a procsub follows.
         assert_parse!(
             do_group("do { foo; } done <(bar)") => "<(bar)",
-            Pipeline::new(vec![
+            Pipeline::new(vinto![
                 CompoundCmd::new(
                     Construct::BraceGroup(tests::pipeline("foo").into()),
                     vec![],
-                ).into()
+                )
             ]).into(),
             [((1, 18), (1, 20), ParseDiagnosticKind::SusToken)]
         );
@@ -1823,7 +1818,7 @@ mod tests {
             InListed::new(
                 "foo",
                 vec![Word::new(vec![WordSgmt::Glob("*".into())])],
-                Pipeline::new(vec![tests::cmd("bar").into()]),
+                Pipeline::new(vinto![tests::cmd("bar")]),
             )
             .into()
         );
@@ -1840,13 +1835,17 @@ mod tests {
             for_loop("for (( i=0;\ti<5; i++ ) ); do foo; done"),
             ArithForLoop::new(
                 (
-                    vec![
-                        BinExpr::new(tests::var("i"), tests::arith_number("0"), BinOp::Eq,).into()
-                    ],
-                    vec![
-                        BinExpr::new(tests::var("i"), tests::arith_number("5"), BinOp::Lt,).into()
-                    ],
-                    vec![UnExpr::new(tests::var("i"), UnOp::Inc).into()]
+                    vinto![BinExpr::new(
+                        tests::var("i"),
+                        tests::arith_number("0"),
+                        BinOp::Eq,
+                    )],
+                    vinto![BinExpr::new(
+                        tests::var("i"),
+                        tests::arith_number("5"),
+                        BinOp::Lt
+                    )],
+                    vinto![UnExpr::new(tests::var("i"), UnOp::Inc)]
                 ),
                 tests::pipeline("foo"),
             )
@@ -1857,7 +1856,7 @@ mod tests {
         // The header sections can be empty.
         assert_parse!(
             for_loop("for ((;;)); do foo; done"),
-            ArithForLoop::new((vec![], vec![], vec![]), tests::pipeline("foo"),).into()
+            ArithForLoop::new((vec![], vec![], vec![]), tests::pipeline("foo")).into()
         );
     }
 
@@ -1901,11 +1900,10 @@ mod tests {
                 if_block("1", "foo"),
                 vec![],
                 Some(
-                    Pipeline::new(vec![CompoundCmd::new(
+                    Pipeline::new(vinto![CompoundCmd::new(
                         IfCmd::new(if_block("2", "bar"), vec![], None),
                         vec![]
-                    )
-                    .into()])
+                    )])
                     .into()
                 )
             ),
@@ -1918,11 +1916,10 @@ mod tests {
                 if_block("1", "foo"),
                 vec![],
                 Some(
-                    Pipeline::new(vec![CompoundCmd::new(
+                    Pipeline::new(vinto![CompoundCmd::new(
                         IfCmd::new(if_block("2", "bar"), vec![], None),
                         vec![]
-                    )
-                    .into()])
+                    )])
                     .into()
                 )
             )
@@ -1988,22 +1985,18 @@ mod tests {
     #[test]
     fn test_pipeline() {
         // A single command is a valid pipeline.
-        assert_parse!(
-            pipeline("! ls"),
-            Pipeline::new(vec![tests::cmd("ls").into()])
-        );
+        assert_parse!(pipeline("! ls"), Pipeline::new(vinto![tests::cmd("ls")]));
 
         // Make sure we can handle new lines between commands.
         assert_parse!(
             pipeline("ls |\n\ngrep .txt"),
-            Pipeline::new(vec![
-                tests::cmd("ls").into(),
+            Pipeline::new(vinto![
+                tests::cmd("ls"),
                 SimpleCmd::new(
                     Some(tests::word("grep")),
                     vec![],
-                    vec![tests::word(".txt").into()],
+                    vinto![tests::word(".txt")],
                 )
-                .into()
             ])
         );
 
@@ -2024,7 +2017,11 @@ mod tests {
             simple_cmd("foo=bar"),
             SimpleCmd::new(
                 None,
-                vec![Assign::new(tests::var("foo"), tests::word("bar"), BinOp::Eq).into()],
+                vinto![Assign::new(
+                    tests::var("foo"),
+                    tests::word("bar"),
+                    BinOp::Eq
+                )],
                 vec![],
             )
         );
@@ -2034,9 +2031,9 @@ mod tests {
             simple_cmd("foo=bar >file ls"),
             SimpleCmd::new(
                 Some(tests::word("ls")),
-                vec![
-                    Assign::new(tests::var("foo"), tests::word("bar"), BinOp::Eq).into(),
-                    Redir::new(None, RedirOp::Great, tests::word("file")).into(),
+                vinto![
+                    Assign::new(tests::var("foo"), tests::word("bar"), BinOp::Eq),
+                    Redir::new(None, RedirOp::Great, tests::word("file"))
                 ],
                 vec![],
             )
@@ -2045,11 +2042,7 @@ mod tests {
         // Warn when the command looks like a C-like comment.
         assert_parse!(
             simple_cmd("// echo"),
-            SimpleCmd::new(
-                Some(tests::word("//")),
-                vec![],
-                vec![tests::word("echo").into()]
-            ),
+            SimpleCmd::new(Some(tests::word("//")), vec![], vinto![tests::word("echo")]),
             [((1, 1), (1, 3), ParseDiagnosticKind::NotShellCode)]
         );
         assert_parse!(
@@ -2075,10 +2068,11 @@ mod tests {
             SimpleCmd::new(
                 Some(tests::word("let")),
                 vec![],
-                vec![vec![
-                    BinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
-                ]
-                .into()]
+                vinto![vinto![BinExpr::new(
+                    tests::var("x"),
+                    tests::arith_number("0"),
+                    BinOp::Eq
+                )]]
             )
         );
         assert_parse!(
@@ -2086,10 +2080,11 @@ mod tests {
             SimpleCmd::new(
                 Some(tests::word("let")),
                 vec![],
-                vec![vec![
-                    BinExpr::new(tests::var("x"), tests::arith_number("0"), BinOp::Eq).into()
-                ]
-                .into()]
+                vinto![vinto![BinExpr::new(
+                    tests::var("x"),
+                    tests::arith_number("0"),
+                    BinOp::Eq
+                )]]
             )
         );
 
@@ -2115,18 +2110,16 @@ mod tests {
             List::new(
                 tests::pipeline("ls"),
                 List::new(
-                    Pipeline::new(vec![SimpleCmd::new(
+                    Pipeline::new(vinto![SimpleCmd::new(
                         Some(tests::word("echo")),
                         vec![],
-                        vec![Word::new(vec![WordSgmt::SingleQuoted("foo".into())]).into()]
-                    )
-                    .into()]),
-                    Pipeline::new(vec![SimpleCmd::new(
+                        vinto![Word::new(vec![WordSgmt::SingleQuoted("foo".into())])]
+                    )]),
+                    Pipeline::new(vinto![SimpleCmd::new(
                         Some(tests::word("echo")),
                         vec![],
-                        vec![Word::new(vec![WordSgmt::SingleQuoted("bar".into())]).into()]
-                    )
-                    .into()]),
+                        vinto![Word::new(vec![WordSgmt::SingleQuoted("bar".into())])]
+                    )]),
                     ControlOp::AndIf,
                 ),
                 ControlOp::Semi,
@@ -2150,12 +2143,11 @@ mod tests {
             term("com&q=foo"),
             List::new(
                 tests::pipeline("com"),
-                Pipeline::new(vec![SimpleCmd::new(
+                Pipeline::new(vinto![SimpleCmd::new(
                     None,
-                    vec![Assign::new(tests::var("q"), tests::word("foo"), BinOp::Eq).into()],
+                    vinto![Assign::new(tests::var("q"), tests::word("foo"), BinOp::Eq)],
                     vec![],
-                )
-                .into()]),
+                )]),
                 ControlOp::And,
             )
             .into(),

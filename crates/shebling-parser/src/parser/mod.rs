@@ -25,6 +25,7 @@ use nom::{
     Finish,
 };
 use nom_locate::position;
+use wec::vinto;
 
 use crate::{
     ast::*,
