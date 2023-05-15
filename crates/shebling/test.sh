@@ -1,1 +1,2 @@
-(x -lt 0)
+$'Hello\
+World!

@@ -11,4 +11,5 @@ license = "Apache-2.0"
 
 [dependencies]
 clap = { version = "4.2.2", features = ["derive"] }
+shebling-chumsky-parser = { version = "=0.0.0", path = "../shebling-chumsky-parser" }
 shebling-parser = { version = "=0.0.0", path = "../shebling-parser" }

@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "crates/shebling",
+    "crates/shebling-chumsky-parser",
     "crates/shebling-parser"
 ]

@@ -1,0 +1,10 @@
+[package]
+# TODO: Change name to shebling-parser when done with the rewrite.
+name = "shebling-chumsky-parser"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+chumsky = { version = "1.0.0-alpha.4", features = ["label"] }
+miette = { version = "5.8.0", features = ["fancy"] }
+thiserror = "1.0.40"
