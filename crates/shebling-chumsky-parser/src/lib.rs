@@ -86,8 +86,7 @@ impl<'a> chumsky::label::LabelError<'a, &'a str, &'a str> for LexerError {
 }
 
 fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<(Token, SimpleSpan)>, extra::Err<LexerError>> {
-    // Single quoted strings.
-    // Also consider $'' ANSI-C quoting.
+    // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
     let single_quoted = just('$')
         .or_not()
         .then(
@@ -103,19 +102,24 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<(Token, SimpleSpan)>, extra::Err<
         .labelled("single quoted string")
         .as_context();
 
-    // Double quoted strings.
+    // Double quoted strings. We also consider $"" translated strings.
     // Within double quotes, backslashes that are followed by $, `, ", or \ are removed.
     let escaped = just('\\').ignore_then(one_of("$`\"\\"));
-    let double_quoted = none_of('"')
-        .and_is(escaped.not())
-        .or(escaped)
-        .repeated()
-        .collect::<String>()
-        .padded_by(just('"'))
-        .map(|string| {
+    let double_quoted = just('$')
+        .or_not()
+        .then(
+            none_of('"')
+                .and_is(escaped.not())
+                .or(escaped)
+                .repeated()
+                .collect::<String>()
+                .padded_by(just('"')),
+        )
+        .map(|(dollar, string)| {
+            let dollar = dollar.map_or("", |_| "$");
             // Remove line continuations.
             let string = string.replace("\\\n", "");
-            Token::Quoted(format!("\"{string}\""))
+            Token::Quoted(format!("\"{dollar}{string}\""))
         })
         .labelled("double quoted string")
         .as_context();
