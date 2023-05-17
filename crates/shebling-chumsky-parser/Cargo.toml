@@ -8,3 +8,6 @@ edition = "2021"
 chumsky = { version = "1.0.0-alpha.4", features = ["label"] }
 miette = { version = "5.8.0", features = ["fancy"] }
 thiserror = "1.0.40"
+
+[dev-dependencies]
+pretty_assertions = "1.3.0"

@@ -534,6 +534,7 @@ version = "0.0.0"
 dependencies = [
  "chumsky",
  "miette",
+ "pretty_assertions",
  "thiserror",
 ]
 
