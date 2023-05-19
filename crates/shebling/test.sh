@@ -1,2 +1,4 @@
 #!/bin/bash
-$x*100
+
+$"foo\
+bar"

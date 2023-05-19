@@ -2,23 +2,25 @@ use chumsky::{prelude::*, util::MaybeRef};
 use miette::{NamedSource, Report};
 use std::sync::Arc;
 
+// TODO: Document types.
+
 #[derive(Debug, PartialEq)]
 struct Spanned<T>(T, SimpleSpan);
 
 #[derive(Debug, PartialEq)]
-enum Token<'a> {
-    Comment(&'a str),
+enum Token {
+    Comment(String),
     ControlOp(ControlOp),
     RedirOp(RedirOp),
-    Word(Vec<Spanned<WordSgmt<'a>>>),
+    Word(Vec<Spanned<WordSgmt>>),
 }
 
 #[derive(Debug, PartialEq)]
-enum WordSgmt<'a> {
-    DoubleQuoted(Vec<Spanned<WordSgmt<'a>>>),
-    Lit(&'a str),
-    ParamExpansion(Vec<Spanned<WordSgmt<'a>>>),
-    SingleQuoted(&'a str),
+enum WordSgmt {
+    DoubleQuoted(Vec<Spanned<WordSgmt>>),
+    Lit(String),
+    ParamExpansion(Vec<Spanned<WordSgmt>>),
+    SingleQuoted(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -113,7 +115,11 @@ impl<'a> chumsky::label::LabelError<'a, &'a str, &'a str> for LexerError {
     }
 }
 
-fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token<'a>>>, extra::Err<LexerError>> {
+fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<LexerError>> {
+    fn remove_line_conts(string: &str) -> String {
+        string.replace("\\\n", "")
+    }
+
     // Whitespace separating tokens.
     // TODO: Warn when finding "\r\n"s.
     let whitespace = any()
@@ -123,7 +129,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token<'a>>>, extra::Err<L
     // Comments.
     let comment = just('#')
         .then(none_of("\r\n").repeated())
-        .map_slice(Token::Comment);
+        .map_slice(|comment: &str| Token::Comment(comment.into()));
 
     // Operators. Note that the order matters here because some
     // operators are prefixes of others.
@@ -152,77 +158,86 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token<'a>>>, extra::Err<L
     ))
     .map(Token::RedirOp);
 
-    let word_sgmt = recursive(|sgmt| {
-        // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
-        let single_quoted = just('$')
-            .or_not()
-            .then(none_of("'").repeated().padded_by(just("'")))
-            .map_slice(WordSgmt::SingleQuoted)
-            .labelled("single quoted string")
-            .as_context();
+    recursive(|_tokens| {
+        let word_sgmt = recursive(|sgmt| {
+            // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
+            let single_quoted = just('$')
+                .or_not()
+                .ignore_then(
+                    none_of("'")
+                        .repeated()
+                        .map_slice(|string: &str| WordSgmt::SingleQuoted(string.into()))
+                        .padded_by(just("'")),
+                )
+                .labelled("single quoted string")
+                .as_context();
 
-        // Unquoted literal characters. Note that when preceded by a backslash, metacharacters
-        // become literals.
-        let lit = just('\\')
-            .ignore_then(one_of("|&;<>()$`\\\"' \t\n"))
-            .or(none_of("#|&;<>()$`\\\"' \t\n"))
+            // Literal word segments.
+            let lit_sgmt = |can_escape, special| {
+                just('\\')
+                    .ignore_then(one_of(can_escape))
+                    .or(none_of(special))
+                    .repeated()
+                    .at_least(1)
+                    .collect::<String>()
+                    .map(|lit| WordSgmt::Lit(remove_line_conts(&lit)))
+            };
+
+            // Unquoted literal characters. Note that when preceded by a backslash, metacharacters
+            // become literals.
+            let lit = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\\\"' \t\n");
+
+            // Double quoted strings. We also consider $"" translated strings.
+            // Note that backslashes followed by $, `, ", or \ are removed.
+            let double_quoted = just('$')
+                .or_not()
+                .ignore_then(
+                    lit_sgmt("$`\"\\", "$`\"")
+                        .map_with_span(Spanned)
+                        .or(sgmt.clone())
+                        .repeated()
+                        .collect()
+                        .padded_by(just('"')),
+                )
+                .map(WordSgmt::DoubleQuoted)
+                .labelled("double quoted string")
+                .as_context();
+
+            // Parameter expansions.
+            let param_expansion = just('$')
+                .ignore_then(
+                    lit_sgmt("}\"$`' \t", "}\"$`' \t")
+                        .map_with_span(Spanned)
+                        .or(sgmt.and_is(just('}').not()))
+                        .padded_by(whitespace)
+                        .repeated()
+                        .collect()
+                        .delimited_by(just('{'), just('}'))
+                        .or(text::ident().slice().or(any().slice()).map_with_span(
+                            |lit: &str, span| vec![Spanned(WordSgmt::Lit(lit.into()), span)],
+                        )),
+                )
+                .map(WordSgmt::ParamExpansion)
+                .labelled("parameter expansion")
+                .as_context();
+
+            // let cmd_sub = just('$')
+            //     .ignore_then(tokens.delimited_by(just('('), just(')')))
+            //     .map(WordSgmt::CmdSub)
+            //     .labelled("command substitution")
+            //     .as_context();
+
+            choice((single_quoted, double_quoted, param_expansion, lit)).map_with_span(Spanned)
+        });
+
+        let word = word_sgmt.repeated().at_least(1).collect().map(Token::Word);
+
+        choice((control_op, redir_op, comment, word))
+            .map_with_span(Spanned)
+            .padded_by(whitespace)
             .repeated()
-            .at_least(1)
-            .map_slice(WordSgmt::Lit);
-
-        // Inside quotes and expansions, literal segments can vary.
-        let special_lit = |special| {
-            just('\\')
-                .ignore_then(any())
-                .or(none_of(special))
-                .repeated()
-                .at_least(1)
-                .map_slice(WordSgmt::Lit)
-                .map_with_span(Spanned)
-        };
-
-        // Double quoted strings. We also consider $"" translated strings.
-        let double_quoted = just('$')
-            .or_not()
-            .ignore_then(
-                special_lit("$`\"\\\n")
-                    .or(sgmt.clone())
-                    .repeated()
-                    .collect()
-                    .padded_by(just('"')),
-            )
-            .map(WordSgmt::DoubleQuoted)
-            .labelled("double quoted string")
-            .as_context();
-
-        // Parameter expansions.
-        let param_expansion = just('$')
-            .ignore_then(
-                special_lit("}\"$`' \t")
-                    .or(sgmt.and_is(just('}').not()))
-                    .padded_by(whitespace)
-                    .repeated()
-                    .collect()
-                    .delimited_by(just('{'), just('}'))
-                    .or(text::ident()
-                        .slice()
-                        .or(any().slice())
-                        .map_with_span(|lit, span| vec![Spanned(WordSgmt::Lit(lit), span)])),
-            )
-            .map(WordSgmt::ParamExpansion)
-            .labelled("parameter expansion")
-            .as_context();
-
-        choice((single_quoted, double_quoted, param_expansion, lit)).map_with_span(Spanned)
-    });
-
-    let word = word_sgmt.repeated().at_least(1).collect().map(Token::Word);
-
-    choice((control_op, redir_op, comment, word))
-        .map_with_span(Spanned)
-        .padded_by(whitespace)
-        .repeated()
-        .collect()
+            .collect()
+    })
 }
 
 pub fn parse(file_path: impl AsRef<str>, source: &str) {
