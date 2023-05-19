@@ -3,20 +3,22 @@ use miette::{NamedSource, Report};
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq)]
-struct Spanned<'a>(Token<'a>, SimpleSpan);
+struct Spanned<T>(T, SimpleSpan);
 
 #[derive(Debug, PartialEq)]
 enum Token<'a> {
-    ArithExpansion(Vec<Spanned<'a>>),
-    CmdSub(Vec<Spanned<'a>>),
     Comment(&'a str),
     ControlOp(ControlOp),
-    DoubleQuoted(Vec<Spanned<'a>>),
-    Literal(&'a str),
-    ParamExpansion(Vec<Spanned<'a>>),
-    SingleQuoted(&'a str),
     RedirOp(RedirOp),
-    Word(Vec<Spanned<'a>>),
+    Word(Vec<Spanned<WordSgmt<'a>>>),
+}
+
+#[derive(Debug, PartialEq)]
+enum WordSgmt<'a> {
+    DoubleQuoted(Vec<Spanned<WordSgmt<'a>>>),
+    Lit(&'a str),
+    ParamExpansion(Vec<Spanned<WordSgmt<'a>>>),
+    SingleQuoted(&'a str),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -111,7 +113,13 @@ impl<'a> chumsky::label::LabelError<'a, &'a str, &'a str> for LexerError {
     }
 }
 
-fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<'a>>, extra::Err<LexerError>> {
+fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token<'a>>>, extra::Err<LexerError>> {
+    // Whitespace separating tokens.
+    // TODO: Warn when finding "\r\n"s.
+    let whitespace = any()
+        .filter(|c: &char| matches!(c, ' ' | '\t' | '\n'))
+        .repeated();
+
     // Comments.
     let comment = just('#')
         .then(none_of("\r\n").repeated())
@@ -144,52 +152,71 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<'a>>, extra::Err<LexerErr
     ))
     .map(Token::RedirOp);
 
-    // Double quoted strings. We also consider $"" translated strings.
-    let escaped = just('\\').ignore_then(any());
-    let double_quoted = just('$')
-        .or_not()
-        .ignore_then(
-            none_of("$`\"\\\n")
-                .or(escaped)
+    let word_sgmt = recursive(|sgmt| {
+        // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
+        let single_quoted = just('$')
+            .or_not()
+            .then(none_of("'").repeated().padded_by(just("'")))
+            .map_slice(WordSgmt::SingleQuoted)
+            .labelled("single quoted string")
+            .as_context();
+
+        // Unquoted literal characters. Note that when preceded by a backslash, metacharacters
+        // become literals.
+        let lit = just('\\')
+            .ignore_then(one_of("|&;<>()$`\\\"' \t\n"))
+            .or(none_of("#|&;<>()$`\\\"' \t\n"))
+            .repeated()
+            .at_least(1)
+            .map_slice(WordSgmt::Lit);
+
+        // Inside quotes and expansions, literal segments can vary.
+        let special_lit = |special| {
+            just('\\')
+                .ignore_then(any())
+                .or(none_of(special))
                 .repeated()
                 .at_least(1)
-                .slice()
-                .map_with_span(|lit, span| Spanned(Token::Literal(lit), span))
-                .repeated()
-                .collect()
-                .padded_by(just('"')),
-        )
-        .map(Token::DoubleQuoted)
-        .labelled("double quoted string")
-        .as_context();
+                .map_slice(WordSgmt::Lit)
+                .map_with_span(Spanned)
+        };
 
-    // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
-    let single_quoted = just('$')
-        .or_not()
-        .then(none_of("'").repeated().padded_by(just("'")))
-        .map_slice(Token::SingleQuoted)
-        .labelled("single quoted string")
-        .as_context();
+        // Double quoted strings. We also consider $"" translated strings.
+        let double_quoted = just('$')
+            .or_not()
+            .ignore_then(
+                special_lit("$`\"\\\n")
+                    .or(sgmt.clone())
+                    .repeated()
+                    .collect()
+                    .padded_by(just('"')),
+            )
+            .map(WordSgmt::DoubleQuoted)
+            .labelled("double quoted string")
+            .as_context();
 
-    // Literal characters. Note that when preceded by a backslash, metacharacters
-    // become literals.
-    let literal = just('\\')
-        .ignore_then(one_of("|&;<>()$`\\\"' \t\n"))
-        .or(none_of("#|&;<>()$`\\\"' \t\n"))
-        .repeated()
-        .at_least(1)
-        .map_slice(Token::Literal);
+        // Parameter expansions.
+        let param_expansion = just('$')
+            .ignore_then(
+                special_lit("}\"$`' \t")
+                    .or(sgmt.and_is(just('}').not()))
+                    .padded_by(whitespace)
+                    .repeated()
+                    .collect()
+                    .delimited_by(just('{'), just('}'))
+                    .or(text::ident()
+                        .slice()
+                        .or(any().slice())
+                        .map_with_span(|lit, span| vec![Spanned(WordSgmt::Lit(lit), span)])),
+            )
+            .map(WordSgmt::ParamExpansion)
+            .labelled("parameter expansion")
+            .as_context();
 
-    let word = choice((literal, single_quoted, double_quoted))
-        .map_with_span(Spanned)
-        .repeated()
-        .at_least(1)
-        .collect()
-        .map(Token::Word);
+        choice((single_quoted, double_quoted, param_expansion, lit)).map_with_span(Spanned)
+    });
 
-    let whitespace = any()
-        .filter(|c: &char| matches!(c, ' ' | '\t' | '\n'))
-        .repeated();
+    let word = word_sgmt.repeated().at_least(1).collect().map(Token::Word);
 
     choice((control_op, redir_op, comment, word))
         .map_with_span(Spanned)
