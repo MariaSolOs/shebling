@@ -1,3 +1,3 @@
 #!/bin/bash
 
-`echo ls \`echo -a``\``
+`echo ls \`

@@ -17,6 +17,7 @@ enum Token {
 
 #[derive(Debug, PartialEq)]
 enum WordSgmt {
+    BackQuoted(Vec<Spanned<Token>>),
     CmdSub(Vec<Spanned<Token>>),
     DoubleQuoted(Vec<Spanned<WordSgmt>>),
     Lit(String),
@@ -132,8 +133,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
         // Comments.
         let comment = just('#')
             .then(none_of("\r\n").repeated())
-            .slice()
-            .map_with_span(|comment: &str, span| Spanned(Token::Comment(comment.into()), span));
+            .map_slice(|comment: &str| Token::Comment(comment.into()));
 
         // Operators. Note that the order matters here because some
         // operators are prefixes of others.
@@ -160,8 +160,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
             just("<>").to(RedirOp::LessGreat),
             just('<').to(RedirOp::Less),
         ))
-        .map(Token::RedirOp))
-        .map_with_span(Spanned);
+        .map(Token::RedirOp));
 
         // Literal word segments.
         let lit_sgmt = |can_escape, special| {
@@ -173,10 +172,6 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
                 .collect::<String>()
                 .map_with_span(|lit, span| Spanned(WordSgmt::Lit(remove_line_conts(&lit)), span))
         };
-
-        // Unquoted literal characters. Note that when preceded by a backslash, metacharacters
-        // become literals.
-        let lit = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\\\"' \t\n");
 
         let quoted_or_expansion = recursive(|quoted_or_expansion| {
             // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
@@ -209,8 +204,8 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
             // Command substitutions.
             let cmd_sub = just('$')
                 .ignore_then(tokens.clone().delimited_by(just('('), just(')')))
-                .or(tokens.padded_by(just('`')))
                 .map(WordSgmt::CmdSub)
+                .or(tokens.padded_by(just('`')).map(WordSgmt::BackQuoted))
                 .labelled("command substitution")
                 .as_context();
 
@@ -234,14 +229,17 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
             choice((single_quoted, double_quoted, cmd_sub, param_expansion)).map_with_span(Spanned)
         });
 
-        let word = lit
+        // Note that when reading unquoted literals, metacharacters preceded by a
+        // backslash become literals.
+        let word = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n")
             .or(quoted_or_expansion)
             .repeated()
             .at_least(1)
             .collect()
-            .map_with_span(|sgmts, span| Spanned(Token::Word(sgmts), span));
+            .map(Token::Word);
 
         choice((op, comment, word))
+            .map_with_span(Spanned)
             .padded_by(whitespace)
             .repeated()
             .collect()
