@@ -1,4 +1,3 @@
 #!/bin/bash
 
-$"foo\
-bar"
+`echo ls \`echo -a``\``

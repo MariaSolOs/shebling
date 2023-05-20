@@ -17,6 +17,7 @@ enum Token {
 
 #[derive(Debug, PartialEq)]
 enum WordSgmt {
+    CmdSub(Vec<Spanned<Token>>),
     DoubleQuoted(Vec<Spanned<WordSgmt>>),
     Lit(String),
     ParamExpansion(Vec<Spanned<WordSgmt>>),
@@ -116,50 +117,68 @@ impl<'a> chumsky::label::LabelError<'a, &'a str, &'a str> for LexerError {
 }
 
 fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<LexerError>> {
+    /// Utility for removing `\\\n`s (A.K.A. line continuations).
     fn remove_line_conts(string: &str) -> String {
         string.replace("\\\n", "")
     }
 
-    // Whitespace separating tokens.
-    // TODO: Warn when finding "\r\n"s.
-    let whitespace = any()
-        .filter(|c: &char| matches!(c, ' ' | '\t' | '\n'))
-        .repeated();
+    recursive(|tokens| {
+        // Whitespace separating tokens.
+        // TODO: Warn when finding "\r\n"s.
+        let whitespace = any()
+            .filter(|c: &char| matches!(c, ' ' | '\t' | '\n'))
+            .repeated();
 
-    // Comments.
-    let comment = just('#')
-        .then(none_of("\r\n").repeated())
-        .map_slice(|comment: &str| Token::Comment(comment.into()));
+        // Comments.
+        let comment = just('#')
+            .then(none_of("\r\n").repeated())
+            .slice()
+            .map_with_span(|comment: &str, span| Spanned(Token::Comment(comment.into()), span));
 
-    // Operators. Note that the order matters here because some
-    // operators are prefixes of others.
-    let control_op = choice((
-        just("&&").to(ControlOp::AndIf),
-        just('&').to(ControlOp::And),
-        just(";;").to(ControlOp::DSemi),
-        just(';').to(ControlOp::Semi),
-        just("||").to(ControlOp::OrIf),
-        just("|&").to(ControlOp::OrAnd),
-        just('|').to(ControlOp::Or),
-        just('\n').to(ControlOp::Newline),
-    ))
-    .map(Token::ControlOp);
-    let redir_op = choice((
-        just(">|").to(RedirOp::Clobber),
-        just(">>").to(RedirOp::DGreat),
-        just(">&").to(RedirOp::GreatAnd),
-        just('>').to(RedirOp::Great),
-        just("<<-").to(RedirOp::DLessDash),
-        just("<<<").to(RedirOp::TLess),
-        just("<<").to(RedirOp::DLess),
-        just("<&").to(RedirOp::LessAnd),
-        just("<>").to(RedirOp::LessGreat),
-        just('<').to(RedirOp::Less),
-    ))
-    .map(Token::RedirOp);
+        // Operators. Note that the order matters here because some
+        // operators are prefixes of others.
+        let op = choice((
+            just("&&").to(ControlOp::AndIf),
+            just('&').to(ControlOp::And),
+            just(";;").to(ControlOp::DSemi),
+            just(';').to(ControlOp::Semi),
+            just("||").to(ControlOp::OrIf),
+            just("|&").to(ControlOp::OrAnd),
+            just('|').to(ControlOp::Or),
+            just('\n').to(ControlOp::Newline),
+        ))
+        .map(Token::ControlOp)
+        .or(choice((
+            just(">|").to(RedirOp::Clobber),
+            just(">>").to(RedirOp::DGreat),
+            just(">&").to(RedirOp::GreatAnd),
+            just('>').to(RedirOp::Great),
+            just("<<-").to(RedirOp::DLessDash),
+            just("<<<").to(RedirOp::TLess),
+            just("<<").to(RedirOp::DLess),
+            just("<&").to(RedirOp::LessAnd),
+            just("<>").to(RedirOp::LessGreat),
+            just('<').to(RedirOp::Less),
+        ))
+        .map(Token::RedirOp))
+        .map_with_span(Spanned);
 
-    recursive(|_tokens| {
-        let word_sgmt = recursive(|sgmt| {
+        // Literal word segments.
+        let lit_sgmt = |can_escape, special| {
+            just('\\')
+                .ignore_then(one_of(can_escape))
+                .or(none_of(special))
+                .repeated()
+                .at_least(1)
+                .collect::<String>()
+                .map_with_span(|lit, span| Spanned(WordSgmt::Lit(remove_line_conts(&lit)), span))
+        };
+
+        // Unquoted literal characters. Note that when preceded by a backslash, metacharacters
+        // become literals.
+        let lit = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\\\"' \t\n");
+
+        let quoted_or_expansion = recursive(|quoted_or_expansion| {
             // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
             let single_quoted = just('$')
                 .or_not()
@@ -172,29 +191,13 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
                 .labelled("single quoted string")
                 .as_context();
 
-            // Literal word segments.
-            let lit_sgmt = |can_escape, special| {
-                just('\\')
-                    .ignore_then(one_of(can_escape))
-                    .or(none_of(special))
-                    .repeated()
-                    .at_least(1)
-                    .collect::<String>()
-                    .map(|lit| WordSgmt::Lit(remove_line_conts(&lit)))
-            };
-
-            // Unquoted literal characters. Note that when preceded by a backslash, metacharacters
-            // become literals.
-            let lit = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\\\"' \t\n");
-
             // Double quoted strings. We also consider $"" translated strings.
             // Note that backslashes followed by $, `, ", or \ are removed.
             let double_quoted = just('$')
                 .or_not()
                 .ignore_then(
                     lit_sgmt("$`\"\\", "$`\"")
-                        .map_with_span(Spanned)
-                        .or(sgmt.clone())
+                        .or(quoted_or_expansion.clone())
                         .repeated()
                         .collect()
                         .padded_by(just('"')),
@@ -203,12 +206,19 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
                 .labelled("double quoted string")
                 .as_context();
 
+            // Command substitutions.
+            let cmd_sub = just('$')
+                .ignore_then(tokens.clone().delimited_by(just('('), just(')')))
+                .or(tokens.padded_by(just('`')))
+                .map(WordSgmt::CmdSub)
+                .labelled("command substitution")
+                .as_context();
+
             // Parameter expansions.
             let param_expansion = just('$')
                 .ignore_then(
                     lit_sgmt("}\"$`' \t", "}\"$`' \t")
-                        .map_with_span(Spanned)
-                        .or(sgmt.and_is(just('}').not()))
+                        .or(quoted_or_expansion)
                         .padded_by(whitespace)
                         .repeated()
                         .collect()
@@ -221,19 +231,17 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
                 .labelled("parameter expansion")
                 .as_context();
 
-            // let cmd_sub = just('$')
-            //     .ignore_then(tokens.delimited_by(just('('), just(')')))
-            //     .map(WordSgmt::CmdSub)
-            //     .labelled("command substitution")
-            //     .as_context();
-
-            choice((single_quoted, double_quoted, param_expansion, lit)).map_with_span(Spanned)
+            choice((single_quoted, double_quoted, cmd_sub, param_expansion)).map_with_span(Spanned)
         });
 
-        let word = word_sgmt.repeated().at_least(1).collect().map(Token::Word);
+        let word = lit
+            .or(quoted_or_expansion)
+            .repeated()
+            .at_least(1)
+            .collect()
+            .map_with_span(|sgmts, span| Spanned(Token::Word(sgmts), span));
 
-        choice((control_op, redir_op, comment, word))
-            .map_with_span(Spanned)
+        choice((op, comment, word))
             .padded_by(whitespace)
             .repeated()
             .collect()
