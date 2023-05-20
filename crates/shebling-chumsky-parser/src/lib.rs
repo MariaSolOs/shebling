@@ -118,11 +118,6 @@ impl<'a> chumsky::label::LabelError<'a, &'a str, &'a str> for LexerError {
 }
 
 fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<LexerError>> {
-    /// Utility for removing `\\\n`s (A.K.A. line continuations).
-    fn remove_line_conts(string: &str) -> String {
-        string.replace("\\\n", "")
-    }
-
     recursive(|tokens| {
         // Whitespace separating tokens.
         // TODO: Warn when finding "\r\n"s.
@@ -163,14 +158,17 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
         .map(Token::RedirOp));
 
         // Literal word segments.
-        let lit_sgmt = |can_escape, special| {
+        let lit_sgmt = |can_escape, special, remove| {
             just('\\')
                 .ignore_then(one_of(can_escape))
                 .or(none_of(special))
                 .repeated()
                 .at_least(1)
                 .collect::<String>()
-                .map_with_span(|lit, span| Spanned(WordSgmt::Lit(remove_line_conts(&lit)), span))
+                .map_with_span(move |lit, span| {
+                    // Remove special patterns from the final lit.
+                    Spanned(WordSgmt::Lit(lit.replace(remove, "")), span)
+                })
         };
 
         let quoted_or_expansion = recursive(|quoted_or_expansion| {
@@ -191,7 +189,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
             let double_quoted = just('$')
                 .or_not()
                 .ignore_then(
-                    lit_sgmt("$`\"\\", "$`\"")
+                    lit_sgmt("$`\"\\", "$`\"", "\\\n")
                         .or(quoted_or_expansion.clone())
                         .repeated()
                         .collect()
@@ -212,7 +210,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
             // Parameter expansions.
             let param_expansion = just('$')
                 .ignore_then(
-                    lit_sgmt("}\"$`' \t", "}\"$`' \t")
+                    lit_sgmt("}\"$`' \t", "}\"$`' \t", "\\\n")
                         .or(quoted_or_expansion)
                         .padded_by(whitespace)
                         .repeated()
@@ -231,7 +229,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
 
         // Note that when reading unquoted literals, metacharacters preceded by a
         // backslash become literals.
-        let word = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n")
+        let word = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n", "\n")
             .or(quoted_or_expansion)
             .repeated()
             .at_least(1)
