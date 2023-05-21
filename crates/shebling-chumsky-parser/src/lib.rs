@@ -120,10 +120,7 @@ impl<'a> chumsky::label::LabelError<'a, &'a str, &'a str> for LexerError {
 fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<LexerError>> {
     recursive(|tokens| {
         // Whitespace separating tokens.
-        // TODO: Warn when finding "\r\n"s.
-        let whitespace = any()
-            .filter(|c: &char| matches!(c, ' ' | '\t' | '\n'))
-            .repeated();
+        let whitespace = any().filter(|c: &char| matches!(c, ' ' | '\t')).repeated();
 
         // Comments.
         let comment = just('#')

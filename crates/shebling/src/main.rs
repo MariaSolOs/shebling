@@ -32,8 +32,8 @@ fn main() {
     let file_path = args.path.to_string_lossy();
     match fs::read_to_string(&args.path) {
         // Ok(source) => shebling_chumsky_parser::parse(file_path, &source),
-        Ok(source_code) => {
-            let lexer = Lexer::new(&source_code);
+        Ok(source) => {
+            let lexer = Lexer::new(&source);
             println!("{:#?}", lexer.read_tokens());
         }
         Err(err) => {

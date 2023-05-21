@@ -36,6 +36,7 @@ pub(crate) enum ControlOp {
 
 #[derive(Debug)]
 pub(crate) enum Token {
+    Comment(String),
     ControlOp(ControlOp),
 }
 
@@ -61,10 +62,12 @@ impl<'a> Lexer<'a> {
         self.eat_while(|c| matches!(c, ' ' | '\t'));
 
         while let Some(c) = self.bump() {
+            // Minus one because we just read the starting character.
             let start = self.chars_read - 1;
 
             let token = match c {
                 '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
+                '#' => Token::Comment(self.comment()),
                 _ => todo!(),
             };
 
@@ -77,51 +80,44 @@ impl<'a> Lexer<'a> {
             ));
 
             // Consume trailing whitespace.
+            // TODO: Warn when finding "\r\n"s.
             self.eat_while(|c| matches!(c, ' ' | '\t'));
         }
 
         tokens
     }
 
-    fn control_op(&mut self) -> ControlOp {
-        match self.prev_char {
-            '&' => match self.peek() {
-                Some('&') => {
-                    self.bump();
-                    ControlOp::AndIf
-                }
-                _ => ControlOp::And,
-            },
-            ';' => match self.peek() {
-                Some(';') => {
-                    self.bump();
-                    ControlOp::DSemi
-                }
-                _ => ControlOp::Semi,
-            },
-            '|' => match self.peek() {
-                Some('|') => {
-                    self.bump();
-                    ControlOp::OrIf
-                }
-                Some('&') => {
-                    self.bump();
-                    ControlOp::OrAnd
-                }
-                _ => ControlOp::Or,
-            },
-            '\n' => ControlOp::Newline,
-            _ => unreachable!("An operator prefix should have been read."),
-        }
+    fn comment(&mut self) -> String {
+        self.eat_while(|c| !matches!(c, '\r' | '\n'))
     }
 
-    fn eat_while(&mut self, mut predicate: impl FnMut(&char) -> bool) {
-        while let Some(c) = self.peek() {
-            if predicate(c) {
-                self.bump();
-            } else {
-                break;
+    fn control_op(&mut self) -> ControlOp {
+        match self.prev_char {
+            '&' => {
+                if self.peek_bump(|c| c == &'&').is_some() {
+                    ControlOp::AndIf
+                } else {
+                    ControlOp::And
+                }
             }
+            ';' => {
+                if self.peek_bump(|c| c == &';').is_some() {
+                    ControlOp::DSemi
+                } else {
+                    ControlOp::Semi
+                }
+            }
+            '|' => {
+                if self.peek_bump(|c| c == &'|').is_some() {
+                    ControlOp::OrIf
+                } else if self.peek_bump(|c| c == &'&').is_some() {
+                    ControlOp::OrAnd
+                } else {
+                    ControlOp::Or
+                }
+            }
+            '\n' => ControlOp::Newline,
+            _ => unreachable!("An operator prefix should have been read."),
         }
     }
 
@@ -133,7 +129,23 @@ impl<'a> Lexer<'a> {
         Some(c)
     }
 
-    fn peek(&mut self) -> Option<&char> {
-        self.chars.peek()
+    fn peek_bump(&mut self, condition: impl Fn(&char) -> bool) -> Option<char> {
+        let c = self.chars.peek()?;
+
+        if condition(c) {
+            self.bump()
+        } else {
+            None
+        }
+    }
+
+    fn eat_while(&mut self, condition: impl Fn(&char) -> bool) -> String {
+        let mut eaten = String::new();
+
+        while let Some(c) = self.peek_bump(&condition) {
+            eaten.push(c);
+        }
+
+        eaten
     }
 }
