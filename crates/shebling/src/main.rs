@@ -1,5 +1,9 @@
+mod lexer;
+
 use clap::{CommandFactory, Parser};
 use std::{fs, path::PathBuf};
+
+use lexer::Lexer;
 
 // TODO: Default values?
 #[derive(clap::Parser)]
@@ -27,7 +31,11 @@ fn main() {
     // TODO: Use miette here.
     let file_path = args.path.to_string_lossy();
     match fs::read_to_string(&args.path) {
-        Ok(source_code) => shebling_chumsky_parser::parse(file_path, &source_code),
+        // Ok(source) => shebling_chumsky_parser::parse(file_path, &source),
+        Ok(source_code) => {
+            let lexer = Lexer::new(&source_code);
+            println!("{:#?}", lexer.read_tokens());
+        }
         Err(err) => {
             let mut cmd = Args::command();
             cmd.error(
