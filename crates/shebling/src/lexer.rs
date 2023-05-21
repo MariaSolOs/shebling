@@ -40,9 +40,34 @@ pub(crate) enum ControlOp {
 }
 
 #[derive(Debug)]
+pub(crate) enum RedirOp {
+    /// `>|`
+    Clobber,
+    /// `>>`
+    DGreat,
+    /// `<<`
+    DLess,
+    /// `<<-`
+    DLessDash,
+    /// `>`
+    Great,
+    /// `>&`
+    GreatAnd,
+    /// `<`
+    Less,
+    /// `<&`
+    LessAnd,
+    /// `<>`
+    LessGreat,
+    /// `<<<`
+    TLess,
+}
+
+#[derive(Debug)]
 pub(crate) enum Token {
     Comment(String),
     ControlOp(ControlOp),
+    RedirOp(RedirOp),
 }
 
 pub(crate) struct Lexer<'a> {
@@ -60,7 +85,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(crate) fn read_tokens(mut self) -> Vec<Spanned<Token>> {
+    pub(crate) fn tokenize(mut self) -> Vec<Spanned<Token>> {
         let mut tokens = Vec::new();
 
         // Eat any starting whitespace.
@@ -72,6 +97,7 @@ impl<'a> Lexer<'a> {
 
             let token = match c {
                 '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
+                '<' | '>' => Token::RedirOp(self.redir_op()),
                 '#' => Token::Comment(self.comment()),
                 _ => todo!(),
             };
@@ -112,16 +138,34 @@ impl<'a> Lexer<'a> {
                     ControlOp::Semi
                 }
             }
-            '|' => {
-                if self.peek_bump(|c| c == &'|').is_some() {
-                    ControlOp::OrIf
-                } else if self.peek_bump(|c| c == &'&').is_some() {
-                    ControlOp::OrAnd
-                } else {
-                    ControlOp::Or
-                }
-            }
+            '|' => match self.peek_bump(|c| matches!(c, '&' | '|')) {
+                Some('&') => ControlOp::OrAnd,
+                Some('|') => ControlOp::OrIf,
+                _ => ControlOp::Or,
+            },
             '\n' => ControlOp::Newline,
+            _ => unreachable!("An operator prefix should have been read."),
+        }
+    }
+
+    fn redir_op(&mut self) -> RedirOp {
+        match self.prev_char {
+            '<' => match self.peek_bump(|c| matches!(c, '<' | '&' | '>')) {
+                Some('<') => match self.peek_bump(|c| matches!(c, '_' | '<')) {
+                    Some('-') => RedirOp::DLessDash,
+                    Some('<') => RedirOp::TLess,
+                    _ => RedirOp::DLess,
+                },
+                Some('&') => RedirOp::LessAnd,
+                Some('>') => RedirOp::LessGreat,
+                _ => RedirOp::Less,
+            },
+            '>' => match self.peek_bump(|c| matches!(c, '|' | '>' | '&')) {
+                Some('|') => RedirOp::Clobber,
+                Some('>') => RedirOp::DGreat,
+                Some('&') => RedirOp::GreatAnd,
+                _ => RedirOp::Great,
+            },
             _ => unreachable!("An operator prefix should have been read."),
         }
     }

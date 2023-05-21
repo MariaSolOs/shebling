@@ -34,7 +34,7 @@ fn main() {
         // Ok(source) => shebling_chumsky_parser::parse(file_path, &source),
         Ok(source) => {
             let lexer = Lexer::new(&source);
-            println!("{:#?}", lexer.read_tokens());
+            println!("{:#?}", lexer.tokenize());
         }
         Err(err) => {
             let mut cmd = Args::command();
