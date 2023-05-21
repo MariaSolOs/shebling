@@ -68,6 +68,7 @@ pub(crate) enum Token {
     Comment(String),
     ControlOp(ControlOp),
     RedirOp(RedirOp),
+    SingleQuoted(String),
 }
 
 pub(crate) struct Lexer<'a> {
@@ -99,6 +100,11 @@ impl<'a> Lexer<'a> {
                     '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
                     '<' | '>' => Token::RedirOp(self.redir_op()),
                     '#' => Token::Comment(self.comment()),
+                    '\'' => Token::SingleQuoted(self.single_quoted()),
+                    '$' => match self.bump() {
+                        Some('\'') => Token::SingleQuoted(self.single_quoted()),
+                        _ => todo!(),
+                    },
                     _ => todo!(),
                 };
 
@@ -171,6 +177,15 @@ impl<'a> Lexer<'a> {
             },
             _ => unreachable!("An operator prefix should have been read."),
         }
+    }
+
+    fn single_quoted(&mut self) -> String {
+        let string = self.eat_while(|c| c != '\'');
+
+        // TODO: Add a Miette error here.
+        assert!(self.bump().is_some_and(|c| c == '\''));
+
+        string
     }
 
     fn bump(&mut self) -> Option<char> {
