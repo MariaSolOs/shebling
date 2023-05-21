@@ -1,14 +1,19 @@
 // TODO: Remove this after development.
 #![allow(dead_code)]
 
-use std::{iter::Peekable, str::Chars};
+use std::{fmt, iter::Peekable, str::Chars};
 
 // TODO: Document types.
 
-#[derive(Debug)]
 struct Span {
     start: usize,
     end: usize,
+}
+
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}..{}", self.start, self.end)
+    }
 }
 
 #[derive(Debug)]
