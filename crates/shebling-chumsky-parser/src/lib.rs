@@ -171,7 +171,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
                 })
         };
 
-        let quoted_or_expansion = recursive(|quoted_or_expansion| {
+        let quoted_or_dollar = recursive(|quoted_or_expansion| {
             // Single quoted strings. Note that we also consider $'' ANSI-C quoting.
             let single_quoted = just('$')
                 .or_not()
@@ -210,7 +210,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
             // Parameter expansions.
             let param_expansion = just('$')
                 .ignore_then(
-                    lit_sgmt("}\"$`' \t", "}\"$`' \t", "\\\n")
+                    lit_sgmt("}\"$`' \t\n", "}\"$`' \t\n", "\n")
                         .or(quoted_or_expansion)
                         .padded_by(whitespace)
                         .repeated()
@@ -230,7 +230,7 @@ fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<Spanned<Token>>, extra::Err<Lexer
         // Note that when reading unquoted literals, metacharacters preceded by a
         // backslash become literals.
         let word = lit_sgmt("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n", "\n")
-            .or(quoted_or_expansion)
+            .or(quoted_or_dollar)
             .repeated()
             .at_least(1)
             .collect()
