@@ -1,7 +1,7 @@
 // TODO: Remove this after development.
 #![allow(dead_code)]
 
-use std::{fmt, iter::Peekable, str::Chars};
+use std::{fmt, str::Chars};
 
 // TODO: Document types.
 
@@ -71,17 +71,17 @@ pub(crate) enum Token {
 }
 
 pub(crate) struct Lexer<'a> {
-    chars: Peekable<Chars<'a>>,
+    chars: Chars<'a>,
     prev_char: char,
-    chars_read: usize,
+    source_len: usize,
 }
 
 impl<'a> Lexer<'a> {
     pub(crate) fn new(source: &'a str) -> Self {
         Lexer {
-            chars: source.chars().peekable(),
+            chars: source.chars(),
             prev_char: char::default(),
-            chars_read: 0,
+            source_len: source.len(),
         }
     }
 
@@ -91,28 +91,31 @@ impl<'a> Lexer<'a> {
         // Eat any starting whitespace.
         self.eat_while(|c| matches!(c, ' ' | '\t'));
 
-        while let Some(c) = self.bump() {
-            // Minus one because we just read the starting character.
-            let start = self.chars_read - 1;
+        loop {
+            let start = self.position();
 
-            let token = match c {
-                '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
-                '<' | '>' => Token::RedirOp(self.redir_op()),
-                '#' => Token::Comment(self.comment()),
-                _ => todo!(),
-            };
+            if let Some(c) = self.bump() {
+                let token = match c {
+                    '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
+                    '<' | '>' => Token::RedirOp(self.redir_op()),
+                    '#' => Token::Comment(self.comment()),
+                    _ => todo!(),
+                };
 
-            tokens.push(Spanned(
-                token,
-                Span {
-                    start,
-                    end: self.chars_read,
-                },
-            ));
+                tokens.push(Spanned(
+                    token,
+                    Span {
+                        start,
+                        end: self.position(),
+                    },
+                ));
 
-            // Consume trailing whitespace.
-            // TODO: Warn when finding "\r\n"s.
-            self.eat_while(|c| matches!(c, ' ' | '\t'));
+                // Consume trailing whitespace.
+                // TODO: Warn when finding "\r\n"s.
+                self.eat_while(|c| matches!(c, ' ' | '\t'));
+            } else {
+                break;
+            }
         }
 
         tokens
@@ -125,14 +128,14 @@ impl<'a> Lexer<'a> {
     fn control_op(&mut self) -> ControlOp {
         match self.prev_char {
             '&' => {
-                if self.peek_bump(|c| c == &'&').is_some() {
+                if self.peek_bump(|c| c == '&').is_some() {
                     ControlOp::AndIf
                 } else {
                     ControlOp::And
                 }
             }
             ';' => {
-                if self.peek_bump(|c| c == &';').is_some() {
+                if self.peek_bump(|c| c == ';').is_some() {
                     ControlOp::DSemi
                 } else {
                     ControlOp::Semi
@@ -173,13 +176,12 @@ impl<'a> Lexer<'a> {
     fn bump(&mut self) -> Option<char> {
         let c = self.chars.next()?;
         self.prev_char = c;
-        self.chars_read += 1;
 
         Some(c)
     }
 
-    fn peek_bump(&mut self, condition: impl Fn(&char) -> bool) -> Option<char> {
-        let c = self.chars.peek()?;
+    fn peek_bump(&mut self, condition: impl Fn(char) -> bool) -> Option<char> {
+        let c = self.chars.clone().next()?;
 
         if condition(c) {
             self.bump()
@@ -188,7 +190,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn eat_while(&mut self, condition: impl Fn(&char) -> bool) -> String {
+    fn eat_while(&mut self, condition: impl Fn(char) -> bool) -> String {
         let mut eaten = String::new();
 
         while let Some(c) = self.peek_bump(&condition) {
@@ -196,5 +198,9 @@ impl<'a> Lexer<'a> {
         }
 
         eaten
+    }
+
+    fn position(&self) -> usize {
+        self.source_len - self.chars.as_str().len()
     }
 }
