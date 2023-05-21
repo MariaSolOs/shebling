@@ -1,7 +1,7 @@
 mod lexer;
 
 use clap::{CommandFactory, Parser};
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, sync::Arc};
 
 use lexer::Lexer;
 
@@ -28,13 +28,26 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    // TODO: Use miette here.
     let file_path = args.path.to_string_lossy();
     match fs::read_to_string(&args.path) {
-        // Ok(source) => shebling_chumsky_parser::parse(file_path, &source),
         Ok(source) => {
             let lexer = Lexer::new(&source);
-            println!("{:#?}", lexer.tokenize());
+            let (tokens, errors) = lexer.tokenize();
+            println!("TOKENS: {:#?}", tokens);
+
+            // HACK: When reporting errors, we add a newline to the end of the source
+            // so that miette can highlight the last character.
+            let source = Arc::new(miette::NamedSource::new(
+                file_path,
+                source.to_owned() + "\n",
+            ));
+
+            errors.into_iter().for_each(|err| {
+                println!(
+                    "{:?}",
+                    miette::Report::new(err).with_source_code(Arc::clone(&source))
+                );
+            });
         }
         Err(err) => {
             let mut cmd = Args::command();

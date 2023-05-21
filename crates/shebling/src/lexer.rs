@@ -71,10 +71,21 @@ pub(crate) enum Token {
     SingleQuoted(String),
 }
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("Lexer bailed!")]
+#[diagnostic(code(shebling::lexer::error), severity("error"))]
+pub(crate) struct LexerError {
+    #[label("{}", label.unwrap_or("stopped here"))]
+    offset: usize,
+    label: Option<&'static str>,
+    // TODO: Help?
+}
+
 pub(crate) struct Lexer<'a> {
     chars: Chars<'a>,
     prev_char: char,
     source_len: usize,
+    errors: Vec<LexerError>,
 }
 
 impl<'a> Lexer<'a> {
@@ -83,10 +94,11 @@ impl<'a> Lexer<'a> {
             chars: source.chars(),
             prev_char: char::default(),
             source_len: source.len(),
+            errors: Vec::new(),
         }
     }
 
-    pub(crate) fn tokenize(mut self) -> Vec<Spanned<Token>> {
+    pub(crate) fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerError>) {
         let mut tokens = Vec::new();
 
         // Eat any starting whitespace.
@@ -124,7 +136,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        tokens
+        (tokens, self.errors)
     }
 
     fn comment(&mut self) -> String {
@@ -182,8 +194,9 @@ impl<'a> Lexer<'a> {
     fn single_quoted(&mut self) -> String {
         let string = self.eat_while(|c| c != '\'');
 
-        // TODO: Add a Miette error here.
-        assert!(self.bump().is_some_and(|c| c == '\''));
+        if self.bump().is_none() {
+            self.report_error("missing closing single quote");
+        }
 
         string
     }
@@ -217,5 +230,12 @@ impl<'a> Lexer<'a> {
 
     fn position(&self) -> usize {
         self.source_len - self.chars.as_str().len()
+    }
+
+    fn report_error(&mut self, label: &'static str) {
+        self.errors.push(LexerError {
+            offset: self.position(),
+            label: Some(label),
+        });
     }
 }
