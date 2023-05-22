@@ -73,6 +73,7 @@ pub(crate) enum Token {
 
 #[derive(Debug)]
 pub(crate) enum WordSgmt {
+    DoubleQuoted(Vec<Spanned<WordSgmt>>),
     Lit(String),
     SingleQuoted { string: String, closed: bool },
 }
@@ -109,39 +110,34 @@ impl<'a> Lexer<'a> {
         // Eat any starting whitespace.
         self.eat_while(|c| matches!(c, ' ' | '\t'));
 
-        loop {
+        while let Some(c) = self.peek() {
             let start = self.position();
 
-            if let Some(c) = self.peek() {
-                let token = match c {
-                    '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
-                    '<' | '>' => Token::RedirOp(self.redir_op()),
-                    '#' => Token::Comment(self.comment()),
-                    _ => Token::Word(self.word()),
-                };
+            let token = match c {
+                '&' | ';' | '|' | '\n' => self.control_op(),
+                '<' | '>' => self.redir_op(),
+                '#' => self.comment(),
+                _ => self.word(),
+            };
 
-                tokens.push(Spanned(token, self.capture_span(start)));
+            tokens.push(Spanned(token, self.capture_span(start)));
 
-                // Consume trailing whitespace.
-                // TODO: Warn when finding "\r\n"s.
-                self.eat_while(|c| matches!(c, ' ' | '\t'));
-            } else {
-                break;
-            }
+            // Consume trailing whitespace.
+            self.eat_while(|c| matches!(c, ' ' | '\t'));
         }
 
         (tokens, self.errors)
     }
 
-    // region: Tokenizers.
-    fn comment(&mut self) -> String {
+    // region: Individual tokenizers.
+    fn comment(&mut self) -> Token {
         assert!(self.bump().is_some_and(|c| c == '#'));
 
-        self.eat_while(|c| !matches!(c, '\r' | '\n'))
+        Token::Comment(self.eat_while(|c| !matches!(c, '\r' | '\n')))
     }
 
-    fn control_op(&mut self) -> ControlOp {
-        match self
+    fn control_op(&mut self) -> Token {
+        let op = match self
             .bump()
             .expect("tokenize() should have peeked something")
         {
@@ -165,8 +161,19 @@ impl<'a> Lexer<'a> {
                 _ => ControlOp::Or,
             },
             '\n' => ControlOp::Newline,
+            // TODO: Warn when finding "\r\n"s.
             _ => unreachable!("tokenize() should have peeked an operator prefix."),
-        }
+        };
+
+        Token::ControlOp(op)
+    }
+
+    fn double_quoted(&mut self) -> WordSgmt {
+        assert!(self.bump().is_some_and(|c| c == '"'));
+
+        let sgmts = Vec::new();
+
+        WordSgmt::DoubleQuoted(sgmts)
     }
 
     fn lit(&mut self, can_escape: &str, stop_with: &str) -> Option<String> {
@@ -199,8 +206,8 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn redir_op(&mut self) -> RedirOp {
-        match self
+    fn redir_op(&mut self) -> Token {
+        let op = match self
             .bump()
             .expect("tokenize() should have peeked something")
         {
@@ -221,7 +228,9 @@ impl<'a> Lexer<'a> {
                 _ => RedirOp::Great,
             },
             _ => unreachable!("tokenize() should have peeked an operator prefix."),
-        }
+        };
+
+        Token::RedirOp(op)
     }
 
     fn single_quoted(&mut self) -> WordSgmt {
@@ -240,18 +249,20 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn word(&mut self) -> Vec<Spanned<WordSgmt>> {
+    fn word(&mut self) -> Token {
         let mut word = Vec::new();
 
         while let Some(c) = self.peek() {
             let sgmt_start = self.position();
             let sgmt = match c {
-                '\'' => WordSgmt::SingleQuoted(self.single_quoted()),
+                '"' => self.double_quoted(),
+                '\'' => self.single_quoted(),
                 '$' => {
                     self.bump();
 
                     match self.peek() {
-                        Some('\'') => WordSgmt::SingleQuoted(self.single_quoted()),
+                        Some('"') => self.double_quoted(),
+                        Some('\'') => self.single_quoted(),
                         _ => todo!(),
                     }
                 }
@@ -267,7 +278,7 @@ impl<'a> Lexer<'a> {
             word.push(Spanned(sgmt, self.capture_span(sgmt_start)));
         }
 
-        word
+        Token::Word(word)
     }
     // endregion
 
