@@ -73,9 +73,15 @@ pub(crate) enum Token {
 
 #[derive(Debug)]
 pub(crate) enum WordSgmt {
-    DoubleQuoted(Vec<Spanned<WordSgmt>>),
+    DoubleQuoted {
+        sgmts: Vec<Spanned<WordSgmt>>,
+        closed: bool,
+    },
     Lit(String),
-    SingleQuoted { string: String, closed: bool },
+    SingleQuoted {
+        string: String,
+        closed: bool,
+    },
 }
 
 // TODO: Create an enum with specific errors.
@@ -171,9 +177,34 @@ impl<'a> Lexer<'a> {
     fn double_quoted(&mut self) -> WordSgmt {
         assert!(self.bump().is_some_and(|c| c == '"'));
 
-        let sgmts = Vec::new();
+        let mut sgmts = Vec::new();
 
-        WordSgmt::DoubleQuoted(sgmts)
+        while let Some(c) = self.peek() {
+            let sgmt_start = self.position();
+
+            let sgmt = if let Some(lit) = self.lit("\\\"$`", "$`\"") {
+                WordSgmt::Lit(lit)
+            } else {
+                match c {
+                    // Reached the end of the string.
+                    '"' => break,
+                    _ => todo!(),
+                }
+            };
+
+            sgmts.push(Spanned(sgmt, self.capture_span(sgmt_start)));
+        }
+
+        WordSgmt::DoubleQuoted {
+            sgmts,
+            closed: if let Some(c) = self.bump() {
+                assert!(c == '"');
+                true
+            } else {
+                self.report_error("missing closing double quote");
+                false
+            },
+        }
     }
 
     fn lit(&mut self, can_escape: &str, stop_with: &str) -> Option<String> {
@@ -240,11 +271,12 @@ impl<'a> Lexer<'a> {
 
         WordSgmt::SingleQuoted {
             string,
-            closed: if self.bump().is_none() {
+            closed: if let Some(c) = self.bump() {
+                assert!(c == '\'');
+                true
+            } else {
                 self.report_error("missing closing single quote");
                 false
-            } else {
-                true
             },
         }
     }

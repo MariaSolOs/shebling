@@ -1,3 +1,3 @@
-# A comment
+#!/bin/bash
 
-echo       <>'Hola!'Foo
+"Hola"Foo <<
