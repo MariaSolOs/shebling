@@ -68,6 +68,12 @@ pub(crate) enum Token {
     Comment(String),
     ControlOp(ControlOp),
     RedirOp(RedirOp),
+    Word(Vec<Spanned<WordSgmt>>),
+}
+
+#[derive(Debug)]
+pub(crate) enum WordSgmt {
+    Lit(String),
     SingleQuoted(String),
 }
 
@@ -83,7 +89,6 @@ pub(crate) struct LexerError {
 
 pub(crate) struct Lexer<'a> {
     chars: Chars<'a>,
-    prev_char: char,
     source_len: usize,
     errors: Vec<LexerError>,
 }
@@ -92,7 +97,6 @@ impl<'a> Lexer<'a> {
     pub(crate) fn new(source: &'a str) -> Self {
         Lexer {
             chars: source.chars(),
-            prev_char: char::default(),
             source_len: source.len(),
             errors: Vec::new(),
         }
@@ -107,26 +111,45 @@ impl<'a> Lexer<'a> {
         loop {
             let start = self.position();
 
-            if let Some(c) = self.bump() {
+            if let Some(c) = self.peek() {
                 let token = match c {
                     '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
                     '<' | '>' => Token::RedirOp(self.redir_op()),
                     '#' => Token::Comment(self.comment()),
-                    '\'' => Token::SingleQuoted(self.single_quoted()),
-                    '$' => match self.bump() {
-                        Some('\'') => Token::SingleQuoted(self.single_quoted()),
-                        _ => todo!(),
-                    },
-                    _ => todo!(),
+                    _ => {
+                        let mut word = Vec::new();
+
+                        while let Some(c) = self.peek() {
+                            let sgmt_start = self.position();
+                            let sgmt = match c {
+                                '\'' => WordSgmt::SingleQuoted(self.single_quoted()),
+                                '$' => {
+                                    self.bump();
+
+                                    match self.peek() {
+                                        Some('\'') => WordSgmt::SingleQuoted(self.single_quoted()),
+                                        _ => todo!(),
+                                    }
+                                }
+                                _ => {
+                                    if let Some(lit) =
+                                        self.lit("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n")
+                                    {
+                                        WordSgmt::Lit(lit)
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            };
+
+                            word.push(Spanned(sgmt, self.capture_span(sgmt_start)));
+                        }
+
+                        Token::Word(word)
+                    }
                 };
 
-                tokens.push(Spanned(
-                    token,
-                    Span {
-                        start,
-                        end: self.position(),
-                    },
-                ));
+                tokens.push(Spanned(token, self.capture_span(start)));
 
                 // Consume trailing whitespace.
                 // TODO: Warn when finding "\r\n"s.
@@ -140,11 +163,16 @@ impl<'a> Lexer<'a> {
     }
 
     fn comment(&mut self) -> String {
+        assert!(self.bump().is_some_and(|c| c == '#'));
+
         self.eat_while(|c| !matches!(c, '\r' | '\n'))
     }
 
     fn control_op(&mut self) -> ControlOp {
-        match self.prev_char {
+        match self
+            .bump()
+            .expect("tokenize() should have peeked something")
+        {
             '&' => {
                 if self.peek_bump(|c| c == '&').is_some() {
                     ControlOp::AndIf
@@ -165,12 +193,45 @@ impl<'a> Lexer<'a> {
                 _ => ControlOp::Or,
             },
             '\n' => ControlOp::Newline,
-            _ => unreachable!("An operator prefix should have been read."),
+            _ => unreachable!("tokenize() should have peeked an operator prefix."),
+        }
+    }
+
+    fn lit(&mut self, can_escape: &str, stop_with: &str) -> Option<String> {
+        let mut lit = String::new();
+
+        while let Some(c) = self.peek_bump(|c| !stop_with.contains(c)) {
+            match c {
+                '\\' => match self.bump() {
+                    Some('\n') => {
+                        // Line continuation, don't add anything to the literal.
+                    }
+                    Some(c) => {
+                        if !can_escape.contains(c) {
+                            lit.push('\\');
+                        }
+                        lit.push(c);
+                    }
+                    None => {
+                        self.report_error("no character to escape");
+                    }
+                },
+                c => lit.push(c),
+            };
+        }
+
+        if lit.is_empty() {
+            None
+        } else {
+            Some(lit)
         }
     }
 
     fn redir_op(&mut self) -> RedirOp {
-        match self.prev_char {
+        match self
+            .bump()
+            .expect("tokenize() should have peeked something")
+        {
             '<' => match self.peek_bump(|c| matches!(c, '<' | '&' | '>')) {
                 Some('<') => match self.peek_bump(|c| matches!(c, '_' | '<')) {
                     Some('-') => RedirOp::DLessDash,
@@ -187,11 +248,13 @@ impl<'a> Lexer<'a> {
                 Some('&') => RedirOp::GreatAnd,
                 _ => RedirOp::Great,
             },
-            _ => unreachable!("An operator prefix should have been read."),
+            _ => unreachable!("tokenize() should have peeked an operator prefix."),
         }
     }
 
     fn single_quoted(&mut self) -> String {
+        assert!(self.bump().is_some_and(|c| c == '\''));
+
         let string = self.eat_while(|c| c != '\'');
 
         if self.bump().is_none() {
@@ -202,20 +265,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn bump(&mut self) -> Option<char> {
-        let c = self.chars.next()?;
-        self.prev_char = c;
-
-        Some(c)
-    }
-
-    fn peek_bump(&mut self, condition: impl Fn(char) -> bool) -> Option<char> {
-        let c = self.chars.clone().next()?;
-
-        if condition(c) {
-            self.bump()
-        } else {
-            None
-        }
+        self.chars.next()
     }
 
     fn eat_while(&mut self, condition: impl Fn(char) -> bool) -> String {
@@ -228,8 +278,29 @@ impl<'a> Lexer<'a> {
         eaten
     }
 
+    fn peek(&self) -> Option<char> {
+        self.chars.clone().next()
+    }
+
+    fn peek_bump(&mut self, condition: impl Fn(char) -> bool) -> Option<char> {
+        let c = self.peek()?;
+
+        if condition(c) {
+            self.bump()
+        } else {
+            None
+        }
+    }
+
     fn position(&self) -> usize {
         self.source_len - self.chars.as_str().len()
+    }
+
+    fn capture_span(&self, start: usize) -> Span {
+        Span {
+            start,
+            end: self.position(),
+        }
     }
 
     fn report_error(&mut self, label: &'static str) {

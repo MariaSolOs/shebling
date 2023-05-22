@@ -1,3 +1,3 @@
-# A comment‘
+# A comment
 
-& ;; 'A string here
+echo       <>'Hola!'Foo
