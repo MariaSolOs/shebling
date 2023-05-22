@@ -3,7 +3,7 @@
 
 use std::{fmt, str::Chars};
 
-// TODO: Document types.
+// TODO: Document types and function logic.
 
 struct Span {
     start: usize,
@@ -74,7 +74,7 @@ pub(crate) enum Token {
 #[derive(Debug)]
 pub(crate) enum WordSgmt {
     Lit(String),
-    SingleQuoted(String),
+    SingleQuoted { string: String, closed: bool },
 }
 
 // TODO: Create an enum with specific errors.
@@ -224,16 +224,20 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn single_quoted(&mut self) -> String {
+    fn single_quoted(&mut self) -> WordSgmt {
         assert!(self.bump().is_some_and(|c| c == '\''));
 
         let string = self.eat_while(|c| c != '\'');
 
-        if self.bump().is_none() {
-            self.report_error("missing closing single quote");
+        WordSgmt::SingleQuoted {
+            string,
+            closed: if self.bump().is_none() {
+                self.report_error("missing closing single quote");
+                false
+            } else {
+                true
+            },
         }
-
-        string
     }
 
     fn word(&mut self) -> Vec<Spanned<WordSgmt>> {
@@ -267,6 +271,7 @@ impl<'a> Lexer<'a> {
     }
     // endregion
 
+    // region: Cursor utilities.
     fn bump(&mut self) -> Option<char> {
         self.chars.next()
     }
@@ -305,6 +310,7 @@ impl<'a> Lexer<'a> {
             end: self.position(),
         }
     }
+    // endregion
 
     fn report_error(&mut self, label: &'static str) {
         self.errors.push(LexerError {
