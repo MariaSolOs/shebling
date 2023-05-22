@@ -77,6 +77,7 @@ pub(crate) enum WordSgmt {
     SingleQuoted(String),
 }
 
+// TODO: Create an enum with specific errors.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 #[error("Lexer bailed!")]
 #[diagnostic(code(shebling::lexer::error), severity("error"))]
@@ -116,37 +117,7 @@ impl<'a> Lexer<'a> {
                     '&' | ';' | '|' | '\n' => Token::ControlOp(self.control_op()),
                     '<' | '>' => Token::RedirOp(self.redir_op()),
                     '#' => Token::Comment(self.comment()),
-                    _ => {
-                        let mut word = Vec::new();
-
-                        while let Some(c) = self.peek() {
-                            let sgmt_start = self.position();
-                            let sgmt = match c {
-                                '\'' => WordSgmt::SingleQuoted(self.single_quoted()),
-                                '$' => {
-                                    self.bump();
-
-                                    match self.peek() {
-                                        Some('\'') => WordSgmt::SingleQuoted(self.single_quoted()),
-                                        _ => todo!(),
-                                    }
-                                }
-                                _ => {
-                                    if let Some(lit) =
-                                        self.lit("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n")
-                                    {
-                                        WordSgmt::Lit(lit)
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            };
-
-                            word.push(Spanned(sgmt, self.capture_span(sgmt_start)));
-                        }
-
-                        Token::Word(word)
-                    }
+                    _ => Token::Word(self.word()),
                 };
 
                 tokens.push(Spanned(token, self.capture_span(start)));
@@ -162,6 +133,7 @@ impl<'a> Lexer<'a> {
         (tokens, self.errors)
     }
 
+    // region: Tokenizers.
     fn comment(&mut self) -> String {
         assert!(self.bump().is_some_and(|c| c == '#'));
 
@@ -263,6 +235,37 @@ impl<'a> Lexer<'a> {
 
         string
     }
+
+    fn word(&mut self) -> Vec<Spanned<WordSgmt>> {
+        let mut word = Vec::new();
+
+        while let Some(c) = self.peek() {
+            let sgmt_start = self.position();
+            let sgmt = match c {
+                '\'' => WordSgmt::SingleQuoted(self.single_quoted()),
+                '$' => {
+                    self.bump();
+
+                    match self.peek() {
+                        Some('\'') => WordSgmt::SingleQuoted(self.single_quoted()),
+                        _ => todo!(),
+                    }
+                }
+                _ => {
+                    if let Some(lit) = self.lit("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n") {
+                        WordSgmt::Lit(lit)
+                    } else {
+                        break;
+                    }
+                }
+            };
+
+            word.push(Spanned(sgmt, self.capture_span(sgmt_start)));
+        }
+
+        word
+    }
+    // endregion
 
     fn bump(&mut self) -> Option<char> {
         self.chars.next()
