@@ -88,8 +88,15 @@ pub(crate) enum WordSgmt {
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub(crate) enum LexerDiagnostic {
+    #[error("CRLF line ending!")]
+    #[diagnostic(
+        code(shebling::cr_lf),
+        help("Try running the script through tr -d '\\r'.")
+    )]
+    CrLf(#[label("literal carriage return")] usize),
+
     #[error("unclosed {1} string!")]
-    #[diagnostic(code(shebling::unclosed_string), severity("error"))]
+    #[diagnostic(code(shebling::unclosed_string))]
     UnclosedString(#[label("missing closing quote")] usize, &'static str),
 }
 
@@ -115,10 +122,20 @@ impl<'a> Lexer<'a> {
         self.eat_while(|c| matches!(c, ' ' | '\t'));
 
         while let Some(c) = self.peek() {
-            let start = self.position();
+            let mut start = self.position();
 
             let token = match c {
                 '&' | ';' | '|' | '\n' => self.control_op(),
+                '\r' if self.peek2().is_some_and(|c| c == '\n') => {
+                    // Special case for CRLF line endings, which we
+                    // leniently read as new lines.
+                    self.diags.push(LexerDiagnostic::CrLf(start));
+
+                    self.bump();
+                    start = self.position();
+
+                    self.control_op()
+                }
                 '<' | '>' => self.redir_op(),
                 '#' => self.comment(),
                 '(' => Token::LParen,
@@ -149,7 +166,7 @@ impl<'a> Lexer<'a> {
     fn comment(&mut self) -> Token {
         assert!(self.bump().is_some_and(|c| c == '#'));
 
-        Token::Comment(self.eat_while(|c| !matches!(c, '\r' | '\n')))
+        Token::Comment(self.eat_while(|c| c != '\n'))
     }
 
     fn control_op(&mut self) -> Token {
@@ -177,7 +194,6 @@ impl<'a> Lexer<'a> {
                 _ => ControlOp::Or,
             },
             '\n' => ControlOp::Newline,
-            // TODO: Warn when finding "\r\n"s.
             _ => unreachable!("tokenize() should have peeked an operator prefix."),
         };
 
@@ -209,12 +225,14 @@ impl<'a> Lexer<'a> {
             sgmts,
             closed: if let Some(c) = self.bump() {
                 assert!(c == '"');
+
                 true
             } else {
                 self.diags.push(LexerDiagnostic::UnclosedString(
                     self.position(),
                     "double quoted",
                 ));
+
                 false
             },
         }
@@ -300,6 +318,7 @@ impl<'a> Lexer<'a> {
 
         while let Some(c) = self.peek() {
             let sgmt_start = self.position();
+
             let sgmt = match c {
                 '"' => self.double_quoted(),
                 '\'' => self.single_quoted(),
@@ -317,7 +336,7 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 _ => {
-                    if let Some(lit) = self.lit("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\n") {
+                    if let Some(lit) = self.lit("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\r\n") {
                         WordSgmt::Lit(lit)
                     } else {
                         break;
@@ -353,6 +372,12 @@ impl<'a> Lexer<'a> {
 
     fn peek(&self) -> Option<char> {
         self.chars.clone().next()
+    }
+
+    fn peek2(&self) -> Option<char> {
+        let mut chars = self.chars.clone();
+        chars.next();
+        chars.next()
     }
 
     fn peek_bump(&mut self, condition: impl Fn(char) -> bool) -> Option<char> {
