@@ -5,6 +5,7 @@ use std::{fmt, str::Chars};
 
 // TODO: Document types and function logic.
 
+#[derive(PartialEq)]
 struct Span {
     start: usize,
     end: usize,
@@ -16,10 +17,10 @@ impl fmt::Debug for Span {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Spanned<T>(T, Span);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum ControlOp {
     /// `&`
     And,
@@ -39,7 +40,7 @@ pub(crate) enum ControlOp {
     Semi,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum RedirOp {
     /// `>|`
     Clobber,
@@ -63,7 +64,7 @@ pub(crate) enum RedirOp {
     TLess,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum Token {
     Comment(String),
     ControlOp(ControlOp),
@@ -73,13 +74,18 @@ pub(crate) enum Token {
     Word(Vec<Spanned<WordSgmt>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum WordSgmt {
+    CmdSub {
+        tokens: Vec<Spanned<Token>>,
+        closed: bool,
+    },
     DoubleQuoted {
         sgmts: Vec<Spanned<WordSgmt>>,
         closed: bool,
     },
     Lit(String),
+    ParamExpansion(Vec<Spanned<WordSgmt>>),
     SingleQuoted {
         string: String,
         closed: bool,
@@ -94,6 +100,10 @@ pub(crate) enum LexerDiagnostic {
         help("Try running the script through tr -d '\\r'.")
     )]
     CrLf(#[label("literal carriage return")] usize),
+
+    #[error("unclosed command substitution!")]
+    #[diagnostic(code(shebling::unclosed_cmd_sub))]
+    UnclosedCmdSub(#[label("missing closing parenthesis")] usize),
 
     #[error("unclosed {1} string!")]
     #[diagnostic(code(shebling::unclosed_string))]
@@ -119,50 +129,52 @@ impl<'a> Lexer<'a> {
         let mut tokens = Vec::new();
 
         // Eat any starting whitespace.
-        self.eat_while(|c| matches!(c, ' ' | '\t'));
+        self.blanks();
 
-        while let Some(c) = self.peek() {
-            let mut start = self.position();
+        while let Some(token) = self.token() {
+            tokens.push(token);
 
-            let token = match c {
-                '&' | ';' | '|' | '\n' => self.control_op(),
-                '\r' if self.peek2().is_some_and(|c| c == '\n') => {
-                    // Special case for CRLF line endings, which we
-                    // leniently read as new lines.
-                    self.diags.push(LexerDiagnostic::CrLf(start));
-
-                    self.bump();
-                    start = self.position();
-
-                    self.control_op()
-                }
-                '<' | '>' => self.redir_op(),
-                '#' => self.comment(),
-                '(' => Token::LParen,
-                ')' => Token::RParen,
-                _ => {
-                    if let Some(word) = self.word() {
-                        word
-                    } else {
-                        // This can happen if the word is just a line continuation.
-                        // Do check that we bumped the cursor.
-                        assert!(start < self.position());
-
-                        continue;
-                    }
-                }
-            };
-
-            tokens.push(Spanned(token, self.capture_span(start)));
-
-            // Consume trailing whitespace.
-            self.eat_while(|c| matches!(c, ' ' | '\t'));
+            // Consume trailing whitespace after each token.
+            self.blanks();
         }
+
+        // Make sure we read everything.
+        assert!(self.chars.next().is_none());
 
         (tokens, self.diags)
     }
 
     // region: Individual tokenizers.
+    fn blanks(&mut self) {
+        self.eat_while(|c| matches!(c, ' ' | '\t'));
+    }
+
+    fn cmd_sub(&mut self) -> WordSgmt {
+        assert!(self.bump().is_some_and(|c| c == '('));
+
+        let mut tokens = Vec::new();
+        while let Some(token) = self.token() {
+            if token.0 == Token::RParen {
+                return WordSgmt::CmdSub {
+                    tokens,
+                    closed: true,
+                };
+            } else {
+                tokens.push(token);
+                self.blanks();
+            }
+        }
+
+        // If we get here, we didn't find the closing paren.
+        self.diags
+            .push(LexerDiagnostic::UnclosedCmdSub(self.position()));
+
+        WordSgmt::CmdSub {
+            tokens,
+            closed: false,
+        }
+    }
+
     fn comment(&mut self) -> Token {
         assert!(self.bump().is_some_and(|c| c == '#'));
 
@@ -266,6 +278,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn param_expansion(&mut self) -> WordSgmt {
+        todo!()
+    }
+
     fn redir_op(&mut self) -> Token {
         let op = match self
             .bump()
@@ -313,6 +329,51 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn token(&mut self) -> Option<Spanned<Token>> {
+        if let Some(c) = self.peek() {
+            let mut start = self.position();
+
+            let token = match c {
+                '&' | ';' | '|' | '\n' => self.control_op(),
+                '\r' if self.peek2().is_some_and(|c| c == '\n') => {
+                    // Special case for CRLF line endings, which we
+                    // leniently read as new lines.
+                    self.diags.push(LexerDiagnostic::CrLf(start));
+
+                    self.bump();
+                    start = self.position();
+
+                    self.control_op()
+                }
+                '<' | '>' => self.redir_op(),
+                '#' => self.comment(),
+                '(' => {
+                    self.bump();
+                    Token::LParen
+                }
+                ')' => {
+                    self.bump();
+                    Token::RParen
+                }
+                _ => {
+                    if let Some(word) = self.word() {
+                        word
+                    } else {
+                        // This can happen if the word is just a line continuation.
+                        // Do check that we bumped the cursor.
+                        assert!(start < self.position());
+
+                        return None;
+                    }
+                }
+            };
+
+            Some(Spanned(token, self.capture_span(start)))
+        } else {
+            None
+        }
+    }
+
     fn word(&mut self) -> Option<Token> {
         let mut word = Vec::new();
 
@@ -328,6 +389,8 @@ impl<'a> Lexer<'a> {
                     match self.peek() {
                         Some('"') => self.double_quoted(),
                         Some('\'') => self.single_quoted(),
+                        Some('(') => self.cmd_sub(),
+                        Some(_) => self.param_expansion(),
                         None => {
                             // This is technically undefined behavior, but we'll just treat it as
                             // a literal dollar.
@@ -395,6 +458,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn capture_span(&self, start: usize) -> Span {
+        assert!(start < self.position());
+
         Span {
             start,
             end: self.position(),
