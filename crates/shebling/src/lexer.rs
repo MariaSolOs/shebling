@@ -5,6 +5,18 @@ use std::{fmt, str::Chars};
 
 // TODO: Document types and function logic.
 
+pub(crate) struct LexerOutput<'a> {
+    tokens: Vec<Spanned<Token>>,
+    diags: Vec<LexerDiagnostic>,
+    remaining: &'a str,
+}
+
+impl<'a> LexerOutput<'a> {
+    pub(crate) fn into_tokens_diags(self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
+        (self.tokens, self.diags)
+    }
+}
+
 struct Span {
     start: usize,
     end: usize,
@@ -119,7 +131,13 @@ impl<'a> Lexer<'a> {
                 '&' | ';' | '|' | '\n' => self.control_op(),
                 '<' | '>' => self.redir_op(),
                 '#' => self.comment(),
-                _ => self.word(),
+                _ => {
+                    if let Some(word) = self.word() {
+                        word
+                    } else {
+                        break;
+                    }
+                }
             };
 
             tokens.push(Spanned(token, self.capture_span(start)));
@@ -128,7 +146,11 @@ impl<'a> Lexer<'a> {
             self.eat_while(|c| matches!(c, ' ' | '\t'));
         }
 
-        (tokens, self.diags)
+        LexerOutput {
+            tokens,
+            diags: self.diags,
+            remaining: self.chars.as_str(),
+        }
     }
 
     // region: Individual tokenizers.
@@ -281,7 +303,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn word(&mut self) -> Token {
+    fn word(&mut self) -> Option<Token> {
         let mut word = Vec::new();
 
         while let Some(c) = self.peek() {
@@ -295,7 +317,11 @@ impl<'a> Lexer<'a> {
                     match self.peek() {
                         Some('"') => self.double_quoted(),
                         Some('\'') => self.single_quoted(),
-                        _ => todo!(),
+                        None => {
+                            // This is technically undefined behavior, but we'll just treat it as
+                            // a literal dollar.
+                            WordSgmt::Lit("$".into())
+                        }
                     }
                 }
                 _ => {
@@ -310,7 +336,11 @@ impl<'a> Lexer<'a> {
             word.push(Spanned(sgmt, self.capture_span(sgmt_start)));
         }
 
-        Token::Word(word)
+        if word.is_empty() {
+            None
+        } else {
+            Some(Token::Word(word))
+        }
     }
     // endregion
 

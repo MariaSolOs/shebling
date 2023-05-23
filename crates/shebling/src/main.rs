@@ -32,7 +32,7 @@ fn main() {
     match fs::read_to_string(&args.path) {
         Ok(source) => {
             let lexer = Lexer::new(&source);
-            let (tokens, errors) = lexer.tokenize();
+            let (tokens, diags) = lexer.tokenize().into_tokens_diags();
             println!("TOKENS: {:#?}", tokens);
 
             // HACK: When reporting errors, we add a newline to the end of the source
@@ -42,7 +42,7 @@ fn main() {
                 source.to_owned() + "\n",
             ));
 
-            errors.into_iter().for_each(|err| {
+            diags.into_iter().for_each(|err| {
                 println!(
                     "{:?}",
                     miette::Report::new(err).with_source_code(Arc::clone(&source))
