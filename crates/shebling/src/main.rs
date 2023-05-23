@@ -32,7 +32,7 @@ fn main() {
     match fs::read_to_string(&args.path) {
         Ok(source) => {
             let lexer = Lexer::new(&source);
-            let (tokens, diags) = lexer.tokenize().into_tokens_diags();
+            let (tokens, diags) = lexer.tokenize();
             println!("TOKENS: {:#?}", tokens);
 
             // HACK: When reporting errors, we add a newline to the end of the source

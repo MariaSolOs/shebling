@@ -5,18 +5,6 @@ use std::{fmt, str::Chars};
 
 // TODO: Document types and function logic.
 
-pub(crate) struct LexerOutput<'a> {
-    tokens: Vec<Spanned<Token>>,
-    diags: Vec<LexerDiagnostic>,
-    remaining: &'a str,
-}
-
-impl<'a> LexerOutput<'a> {
-    pub(crate) fn into_tokens_diags(self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
-        (self.tokens, self.diags)
-    }
-}
-
 struct Span {
     start: usize,
     end: usize,
@@ -79,7 +67,9 @@ pub(crate) enum RedirOp {
 pub(crate) enum Token {
     Comment(String),
     ControlOp(ControlOp),
+    LParen,
     RedirOp(RedirOp),
+    RParen,
     Word(Vec<Spanned<WordSgmt>>),
 }
 
@@ -131,11 +121,17 @@ impl<'a> Lexer<'a> {
                 '&' | ';' | '|' | '\n' => self.control_op(),
                 '<' | '>' => self.redir_op(),
                 '#' => self.comment(),
+                '(' => Token::LParen,
+                ')' => Token::RParen,
                 _ => {
                     if let Some(word) = self.word() {
                         word
                     } else {
-                        break;
+                        // This can happen if the word is just a line continuation.
+                        // Do check that we bumped the cursor.
+                        assert!(start < self.position());
+
+                        continue;
                     }
                 }
             };
@@ -146,11 +142,7 @@ impl<'a> Lexer<'a> {
             self.eat_while(|c| matches!(c, ' ' | '\t'));
         }
 
-        LexerOutput {
-            tokens,
-            diags: self.diags,
-            remaining: self.chars.as_str(),
-        }
+        (tokens, self.diags)
     }
 
     // region: Individual tokenizers.
@@ -344,7 +336,7 @@ impl<'a> Lexer<'a> {
     }
     // endregion
 
-    // region: Cursor utilities.
+    // region: "Cursor" utilities.
     fn bump(&mut self) -> Option<char> {
         self.chars.next()
     }
