@@ -84,21 +84,17 @@ pub(crate) enum WordSgmt {
     },
 }
 
-// TODO: Create an enum with specific errors.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-#[error("Lexer bailed!")]
-#[diagnostic(code(shebling::lexer::error), severity("error"))]
-pub(crate) struct LexerError {
-    #[label("{}", label.unwrap_or("stopped here"))]
-    offset: usize,
-    label: Option<&'static str>,
-    // TODO: Help?
+pub(crate) enum LexerDiagnostic {
+    #[error("unclosed {1} string!")]
+    #[diagnostic(code(shebling::unclosed_string), severity("error"))]
+    UnclosedString(#[label("missing closing quote")] usize, &'static str),
 }
 
 pub(crate) struct Lexer<'a> {
     chars: Chars<'a>,
     source_len: usize,
-    errors: Vec<LexerError>,
+    diags: Vec<LexerDiagnostic>,
 }
 
 impl<'a> Lexer<'a> {
@@ -106,11 +102,11 @@ impl<'a> Lexer<'a> {
         Lexer {
             chars: source.chars(),
             source_len: source.len(),
-            errors: Vec::new(),
+            diags: Vec::new(),
         }
     }
 
-    pub(crate) fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerError>) {
+    pub(crate) fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
         let mut tokens = Vec::new();
 
         // Eat any starting whitespace.
@@ -132,7 +128,7 @@ impl<'a> Lexer<'a> {
             self.eat_while(|c| matches!(c, ' ' | '\t'));
         }
 
-        (tokens, self.errors)
+        (tokens, self.diags)
     }
 
     // region: Individual tokenizers.
@@ -201,7 +197,10 @@ impl<'a> Lexer<'a> {
                 assert!(c == '"');
                 true
             } else {
-                self.report_error("missing closing double quote");
+                self.diags.push(LexerDiagnostic::UnclosedString(
+                    self.position(),
+                    "double quoted",
+                ));
                 false
             },
         }
@@ -213,17 +212,15 @@ impl<'a> Lexer<'a> {
         while let Some(c) = self.peek_bump(|c| !stop_with.contains(c)) {
             match c {
                 '\\' => match self.bump() {
-                    Some('\n') => {
-                        // Line continuation, don't add anything to the literal.
+                    Some('\n') | None => {
+                        // Either a line continuation or a lonely backslash. Either way,
+                        // don't add anything to the literal.
                     }
                     Some(c) => {
                         if !can_escape.contains(c) {
                             lit.push('\\');
                         }
                         lit.push(c);
-                    }
-                    None => {
-                        self.report_error("no character to escape");
                     }
                 },
                 c => lit.push(c),
@@ -275,7 +272,10 @@ impl<'a> Lexer<'a> {
                 assert!(c == '\'');
                 true
             } else {
-                self.report_error("missing closing single quote");
+                self.diags.push(LexerDiagnostic::UnclosedString(
+                    self.position(),
+                    "single quoted",
+                ));
                 false
             },
         }
@@ -354,11 +354,4 @@ impl<'a> Lexer<'a> {
         }
     }
     // endregion
-
-    fn report_error(&mut self, label: &'static str) {
-        self.errors.push(LexerError {
-            offset: self.position(),
-            label: Some(label),
-        });
-    }
 }
