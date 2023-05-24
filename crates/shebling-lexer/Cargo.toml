@@ -1,0 +1,9 @@
+[package]
+name = "shebling-lexer"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+miette = { workspace = "true" }
+shebling-ast = { version = "0.0.0", path = "../shebling-ast" }
+thiserror = { workspace = "true" }

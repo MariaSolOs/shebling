@@ -1,3 +1,3 @@
 #!/bin/bash
 
-$(Hola 'Foo'
+echo $((1\+3))

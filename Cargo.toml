@@ -1,6 +1,11 @@
 [workspace]
 members = [
     "crates/shebling",
-    "crates/shebling-chumsky-parser",
+    "crates/shebling-ast",
+    "crates/shebling-lexer",
     "crates/shebling-parser"
 ]
+
+[workspace.dependencies]
+miette = { version = "5.9.0", features = [ "fancy" ]}
+thiserror = "1.0.40"

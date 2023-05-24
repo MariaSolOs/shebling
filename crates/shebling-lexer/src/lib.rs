@@ -1,71 +1,14 @@
 // TODO: Remove this after development.
 #![allow(dead_code)]
 
-use std::{fmt, str::Chars};
+use std::str::Chars;
 
+use shebling_ast::{ControlOp, RedirOp, Span, Spanned};
+
+// TODO: Use itertools?
 // TODO: Document types and function logic.
-
-#[derive(PartialEq)]
-struct Span {
-    start: usize,
-    end: usize,
-}
-
-impl fmt::Debug for Span {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}..{}", self.start, self.end)
-    }
-}
-
 #[derive(Debug, PartialEq)]
-pub(crate) struct Spanned<T>(T, Span);
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum ControlOp {
-    /// `&`
-    And,
-    /// `&&`
-    AndIf,
-    /// `;;`
-    DSemi,
-    /// `\n`
-    Newline,
-    /// `|`
-    Or,
-    /// `|&`
-    OrAnd,
-    /// `||`
-    OrIf,
-    /// `;`
-    Semi,
-}
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum RedirOp {
-    /// `>|`
-    Clobber,
-    /// `>>`
-    DGreat,
-    /// `<<`
-    DLess,
-    /// `<<-`
-    DLessDash,
-    /// `>`
-    Great,
-    /// `>&`
-    GreatAnd,
-    /// `<`
-    Less,
-    /// `<&`
-    LessAnd,
-    /// `<>`
-    LessGreat,
-    /// `<<<`
-    TLess,
-}
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum Token {
+pub enum Token {
     Comment(String),
     ControlOp(ControlOp),
     LParen,
@@ -75,7 +18,7 @@ pub(crate) enum Token {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum WordSgmt {
+pub enum WordSgmt {
     CmdSub {
         tokens: Vec<Spanned<Token>>,
         closed: bool,
@@ -93,7 +36,7 @@ pub(crate) enum WordSgmt {
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-pub(crate) enum LexerDiagnostic {
+pub enum LexerDiagnostic {
     #[error("CRLF line ending!")]
     #[diagnostic(
         code(shebling::cr_lf),
@@ -106,14 +49,14 @@ pub(crate) enum LexerDiagnostic {
     Unclosed(#[label("missing closing '{2}'")] usize, &'static str, char),
 }
 
-pub(crate) struct Lexer<'a> {
+pub struct Lexer<'a> {
     chars: Chars<'a>,
     source_len: usize,
     diags: Vec<LexerDiagnostic>,
 }
 
 impl<'a> Lexer<'a> {
-    pub(crate) fn new(source: &'a str) -> Self {
+    pub fn new(source: &'a str) -> Self {
         Lexer {
             chars: source.chars(),
             source_len: source.len(),
@@ -121,7 +64,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(crate) fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
+    pub fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
         let mut tokens = Vec::new();
 
         // Eat any starting whitespace.
@@ -145,12 +88,14 @@ impl<'a> Lexer<'a> {
         self.eat_while(|c| matches!(c, ' ' | '\t'));
     }
 
-    fn cmd_sub(&mut self) -> WordSgmt {
+    fn cmd_sub_or_arith(&mut self) -> WordSgmt {
         assert!(self.bump().is_some_and(|c| c == '('));
+
+        // TODO: First try to read an arithmetic expression.
 
         let mut tokens = Vec::new();
         while let Some(token) = self.token() {
-            if token.0 == Token::RParen {
+            if *token.token() == Token::RParen {
                 return WordSgmt::CmdSub {
                     tokens,
                     closed: true,
@@ -188,11 +133,21 @@ impl<'a> Lexer<'a> {
                 match c {
                     // Reached the end of the string.
                     '"' => break,
+                    '$' => {
+                        self.bump();
+
+                        match self.peek() {
+                            // This means that the string is unclosed so we don't know
+                            // what the dollar is supposed to be. Anyway...
+                            None => WordSgmt::Lit('$'.into()),
+                            _ => todo!(),
+                        }
+                    }
                     _ => todo!(),
                 }
             };
 
-            sgmts.push(Spanned(sgmt, self.capture_span(sgmt_start)));
+            sgmts.push(Spanned::new(sgmt, self.capture_span(sgmt_start)));
         }
 
         WordSgmt::DoubleQuoted {
@@ -335,7 +290,7 @@ impl<'a> Lexer<'a> {
                 }
             };
 
-            Some(Spanned(token, self.capture_span(start)))
+            Some(Spanned::new(token, self.capture_span(start)))
         } else {
             None
         }
@@ -356,12 +311,12 @@ impl<'a> Lexer<'a> {
                     match self.peek() {
                         Some('"') => self.double_quoted(),
                         Some('\'') => self.single_quoted(),
-                        Some('(') => self.cmd_sub(),
+                        Some('(') => self.cmd_sub_or_arith(),
                         Some(_) => self.param_expansion(),
                         None => {
                             // This is technically undefined behavior, but we'll just treat it as
                             // a literal dollar.
-                            WordSgmt::Lit("$".into())
+                            WordSgmt::Lit('$'.into())
                         }
                     }
                 }
@@ -374,7 +329,7 @@ impl<'a> Lexer<'a> {
                 }
             };
 
-            word.push(Spanned(sgmt, self.capture_span(sgmt_start)));
+            word.push(Spanned::new(sgmt, self.capture_span(sgmt_start)));
         }
 
         if word.is_empty() {
@@ -427,10 +382,7 @@ impl<'a> Lexer<'a> {
     fn capture_span(&self, start: usize) -> Span {
         assert!(start < self.position());
 
-        Span {
-            start,
-            end: self.position(),
-        }
+        Span::new(start, self.position())
     }
     // endregion
 }

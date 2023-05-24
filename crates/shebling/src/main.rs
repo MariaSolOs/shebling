@@ -1,9 +1,7 @@
-mod lexer;
-
 use clap::{CommandFactory, Parser};
 use std::{fs, path::PathBuf, sync::Arc};
 
-use lexer::Lexer;
+use shebling_lexer::Lexer;
 
 // TODO: Default values?
 #[derive(clap::Parser)]
