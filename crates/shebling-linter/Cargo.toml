@@ -1,5 +1,5 @@
 [package]
-name = "shebling-ast"
+name = "shebling-linter"
 version = "0.0.0"
 authors = ["Maria José Solano <majosolano99@gmail.com>"]
 edition = "2021"

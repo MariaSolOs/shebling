@@ -2,8 +2,12 @@
 name = "shebling-lexer"
 version = "0.0.0"
 edition = "2021"
+description = "Placeholder for a shebling crate"
+readme = "README.md"
+repository = "https://github.com/MariaSolOs/shebling"
+license = "Apache-2.0"
 
 [dependencies]
-miette = { workspace = "true" }
+miette = { workspace = true }
 shebling-ast = { version = "0.0.0", path = "../shebling-ast" }
-thiserror = { workspace = "true" }
+thiserror = { workspace = true }

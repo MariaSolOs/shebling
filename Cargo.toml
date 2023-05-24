@@ -3,6 +3,7 @@ members = [
     "crates/shebling",
     "crates/shebling-ast",
     "crates/shebling-lexer",
+    "crates/shebling-linter",
     "crates/shebling-parser"
 ]
 

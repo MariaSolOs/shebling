@@ -503,6 +503,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "shebling-linter"
+version = "0.0.0"
+
+[[package]]
 name = "shebling-parser"
 version = "0.0.0"
 dependencies = [
