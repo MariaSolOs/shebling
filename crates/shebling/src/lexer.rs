@@ -101,13 +101,9 @@ pub(crate) enum LexerDiagnostic {
     )]
     CrLf(#[label("literal carriage return")] usize),
 
-    #[error("unclosed command substitution!")]
-    #[diagnostic(code(shebling::unclosed_cmd_sub))]
-    UnclosedCmdSub(#[label("missing closing parenthesis")] usize),
-
-    #[error("unclosed {1} string!")]
-    #[diagnostic(code(shebling::unclosed_string))]
-    UnclosedString(#[label("missing closing quote")] usize, &'static str),
+    #[error("unclosed {1}!")]
+    #[diagnostic(code(shebling::unclosed))]
+    Unclosed(#[label("missing closing '{2}'")] usize, &'static str, char),
 }
 
 pub(crate) struct Lexer<'a> {
@@ -166,8 +162,11 @@ impl<'a> Lexer<'a> {
         }
 
         // If we get here, we didn't find the closing paren.
-        self.diags
-            .push(LexerDiagnostic::UnclosedCmdSub(self.position()));
+        self.diags.push(LexerDiagnostic::Unclosed(
+            self.position(),
+            "command substitution",
+            ')',
+        ));
 
         WordSgmt::CmdSub {
             tokens,
@@ -237,14 +236,13 @@ impl<'a> Lexer<'a> {
             sgmts,
             closed: if let Some(c) = self.bump() {
                 assert!(c == '"');
-
                 true
             } else {
-                self.diags.push(LexerDiagnostic::UnclosedString(
+                self.diags.push(LexerDiagnostic::Unclosed(
                     self.position(),
                     "double quoted",
+                    '"',
                 ));
-
                 false
             },
         }
@@ -320,9 +318,10 @@ impl<'a> Lexer<'a> {
                 assert!(c == '\'');
                 true
             } else {
-                self.diags.push(LexerDiagnostic::UnclosedString(
+                self.diags.push(LexerDiagnostic::Unclosed(
                     self.position(),
                     "single quoted",
+                    '\'',
                 ));
                 false
             },
