@@ -174,43 +174,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn comment(&mut self) -> Token {
-        assert!(self.bump().is_some_and(|c| c == '#'));
-
-        Token::Comment(self.eat_while(|c| c != '\n'))
-    }
-
-    fn control_op(&mut self) -> Token {
-        let op = match self
-            .bump()
-            .expect("tokenize() should have peeked something")
-        {
-            '&' => {
-                if self.peek_bump(|c| c == '&').is_some() {
-                    ControlOp::AndIf
-                } else {
-                    ControlOp::And
-                }
-            }
-            ';' => {
-                if self.peek_bump(|c| c == ';').is_some() {
-                    ControlOp::DSemi
-                } else {
-                    ControlOp::Semi
-                }
-            }
-            '|' => match self.peek_bump(|c| matches!(c, '&' | '|')) {
-                Some('&') => ControlOp::OrAnd,
-                Some('|') => ControlOp::OrIf,
-                _ => ControlOp::Or,
-            },
-            '\n' => ControlOp::Newline,
-            _ => unreachable!("tokenize() should have peeked an operator prefix."),
-        };
-
-        Token::ControlOp(op)
-    }
-
     fn double_quoted(&mut self) -> WordSgmt {
         assert!(self.bump().is_some_and(|c| c == '"'));
 
@@ -280,33 +243,6 @@ impl<'a> Lexer<'a> {
         todo!()
     }
 
-    fn redir_op(&mut self) -> Token {
-        let op = match self
-            .bump()
-            .expect("tokenize() should have peeked something")
-        {
-            '<' => match self.peek_bump(|c| matches!(c, '<' | '&' | '>')) {
-                Some('<') => match self.peek_bump(|c| matches!(c, '_' | '<')) {
-                    Some('-') => RedirOp::DLessDash,
-                    Some('<') => RedirOp::TLess,
-                    _ => RedirOp::DLess,
-                },
-                Some('&') => RedirOp::LessAnd,
-                Some('>') => RedirOp::LessGreat,
-                _ => RedirOp::Less,
-            },
-            '>' => match self.peek_bump(|c| matches!(c, '|' | '>' | '&')) {
-                Some('|') => RedirOp::Clobber,
-                Some('>') => RedirOp::DGreat,
-                Some('&') => RedirOp::GreatAnd,
-                _ => RedirOp::Great,
-            },
-            _ => unreachable!("tokenize() should have peeked an operator prefix."),
-        };
-
-        Token::RedirOp(op)
-    }
-
     fn single_quoted(&mut self) -> WordSgmt {
         assert!(self.bump().is_some_and(|c| c == '\''));
 
@@ -333,7 +269,23 @@ impl<'a> Lexer<'a> {
             let mut start = self.position();
 
             let token = match c {
-                '&' | ';' | '|' | '\n' => self.control_op(),
+                // Control operators:
+                '&' => Token::ControlOp(if self.peek_bump(|c| c == '&').is_some() {
+                    ControlOp::AndIf
+                } else {
+                    ControlOp::And
+                }),
+                ';' => Token::ControlOp(if self.peek_bump(|c| c == ';').is_some() {
+                    ControlOp::DSemi
+                } else {
+                    ControlOp::Semi
+                }),
+                '|' => Token::ControlOp(match self.peek_bump(|c| matches!(c, '&' | '|')) {
+                    Some('&') => ControlOp::OrAnd,
+                    Some('|') => ControlOp::OrIf,
+                    _ => ControlOp::Or,
+                }),
+                '\n' => Token::ControlOp(ControlOp::Newline),
                 '\r' if self.peek2().is_some_and(|c| c == '\n') => {
                     // Special case for CRLF line endings, which we
                     // leniently read as new lines.
@@ -342,10 +294,26 @@ impl<'a> Lexer<'a> {
                     self.bump();
                     start = self.position();
 
-                    self.control_op()
+                    Token::ControlOp(ControlOp::Newline)
                 }
-                '<' | '>' => self.redir_op(),
-                '#' => self.comment(),
+                // Redirection operators:
+                '<' => Token::RedirOp(match self.peek_bump(|c| matches!(c, '<' | '&' | '>')) {
+                    Some('<') => match self.peek_bump(|c| matches!(c, '_' | '<')) {
+                        Some('-') => RedirOp::DLessDash,
+                        Some('<') => RedirOp::TLess,
+                        _ => RedirOp::DLess,
+                    },
+                    Some('&') => RedirOp::LessAnd,
+                    Some('>') => RedirOp::LessGreat,
+                    _ => RedirOp::Less,
+                }),
+                '>' => Token::RedirOp(match self.peek_bump(|c| matches!(c, '|' | '>' | '&')) {
+                    Some('|') => RedirOp::Clobber,
+                    Some('>') => RedirOp::DGreat,
+                    Some('&') => RedirOp::GreatAnd,
+                    _ => RedirOp::Great,
+                }),
+                '#' => Token::Comment(self.eat_while(|c| c != '\n')),
                 '(' => {
                     self.bump();
                     Token::LParen
