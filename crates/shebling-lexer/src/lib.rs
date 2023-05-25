@@ -221,6 +221,10 @@ impl<'a> Lexer<'a> {
                     self.bump();
                     Token::ControlOp(ControlOp::RParen)
                 }
+                '\n' => {
+                    self.bump();
+                    Token::ControlOp(ControlOp::Newline)
+                }
                 '\r' if self.peek2().is_some_and(|c| c == '\n') => {
                     // Special case for CRLF line endings, which we
                     // leniently read as new lines.
