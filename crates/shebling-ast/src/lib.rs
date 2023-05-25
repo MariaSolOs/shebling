@@ -36,6 +36,7 @@ impl<T> Spanned<T> {
 // endregion
 
 // region: Redirections.
+/// Token that performs a redirection function.
 #[derive(Debug, PartialEq)]
 pub enum RedirOp {
     /// `>|`
@@ -56,8 +57,6 @@ pub enum RedirOp {
     LessAnd,
     /// `<>`
     LessGreat,
-    /// `<<<`
-    TLess,
 }
 // endregion
 
