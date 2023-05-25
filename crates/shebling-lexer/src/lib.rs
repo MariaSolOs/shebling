@@ -16,18 +16,15 @@ pub enum Token {
 
 #[derive(Debug, PartialEq)]
 pub enum WordSgmt {
-    CmdSub {
-        tokens: Vec<Spanned<Token>>,
-        closed: bool,
-    },
     DoubleQuoted {
         sgmts: Vec<Spanned<WordSgmt>>,
+        translated: bool,
         closed: bool,
     },
     Lit(String),
-    ParamExpansion(Vec<Spanned<WordSgmt>>),
     SingleQuoted {
         string: String,
+        ansi_c_quoted: bool,
         closed: bool,
     },
 }
@@ -42,8 +39,8 @@ pub enum LexerDiagnostic {
     CrLf(#[label("literal carriage return")] usize),
 
     #[error("unclosed {1}!")]
-    #[diagnostic(code(shebling::unclosed))]
-    Unclosed(#[label("missing closing '{2}'")] usize, &'static str, char),
+    #[diagnostic(code(shebling::unclosed_word))]
+    UnclosedWord(#[label("missing closing '{2}'")] usize, &'static str, char),
 }
 
 struct Lexer<'a> {
@@ -63,6 +60,8 @@ impl<'a> Lexer<'a> {
 
     fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
         let mut tokens = Vec::new();
+
+        // TODO: Process shebang.
 
         // Eat any starting whitespace.
         self.blanks();
@@ -119,8 +118,10 @@ impl<'a> Lexer<'a> {
     }
 
     fn double_quoted(&mut self) -> WordSgmt {
-        assert!(self.bump().is_some_and(|c| c == '"'));
+        // Check if this is a translated string.
+        let translated = self.peek_bump(|c| c == '$').is_some();
 
+        assert!(self.bump().is_some_and(|c| c == '"'));
         let mut sgmts = Vec::new();
 
         while let Some(c) = self.peek() {
@@ -142,7 +143,8 @@ impl<'a> Lexer<'a> {
                             _ => todo!(),
                         }
                     }
-                    _ => todo!(),
+                    '`' => todo!(),
+                    _ => unreachable!("lit() should have consumed '{}'", c),
                 }
             };
 
@@ -151,13 +153,14 @@ impl<'a> Lexer<'a> {
 
         WordSgmt::DoubleQuoted {
             sgmts,
+            translated,
             closed: if let Some(c) = self.bump() {
                 assert!(c == '"');
                 true
             } else {
-                self.diags.push(LexerDiagnostic::Unclosed(
+                self.diags.push(LexerDiagnostic::UnclosedWord(
                     self.position(),
-                    "double quoted",
+                    "double quoted string",
                     '"',
                 ));
                 false
@@ -223,19 +226,22 @@ impl<'a> Lexer<'a> {
     }
 
     fn single_quoted(&mut self) -> WordSgmt {
-        assert!(self.bump().is_some_and(|c| c == '\''));
+        // Check if this is an ANSI-C quoted string.
+        let ansi_c_quoted = self.peek_bump(|c| c == '$').is_some();
 
+        assert!(self.bump().is_some_and(|c| c == '\''));
         let string = self.eat_while(|c| c != '\'');
 
         WordSgmt::SingleQuoted {
             string,
+            ansi_c_quoted,
             closed: if let Some(c) = self.bump() {
                 assert!(c == '\'');
                 true
             } else {
-                self.diags.push(LexerDiagnostic::Unclosed(
+                self.diags.push(LexerDiagnostic::UnclosedWord(
                     self.position(),
-                    "single quoted",
+                    "single quoted string",
                     '\'',
                 ));
                 false
@@ -298,20 +304,17 @@ impl<'a> Lexer<'a> {
                 '"' => self.double_quoted(),
                 '\'' => self.single_quoted(),
                 '$' => {
-                    todo!()
-                    // self.bump();
-
-                    // match self.peek() {
-                    //     Some('"') => self.double_quoted(),
-                    //     Some('\'') => self.single_quoted(),
-                    //     Some('(') => self.cmd_sub_or_arith(),
-                    //     Some(_) => self.param_expansion(),
-                    //     None => {
-                    //         // This is technically undefined behavior, but we'll just treat it as
-                    //         // a literal dollar.
-                    //         WordSgmt::Lit('$'.into())
-                    //     }
-                    // }
+                    match self.peek2() {
+                        Some('"') => self.double_quoted(),
+                        Some('\'') => self.single_quoted(),
+                        None => {
+                            // This is technically undefined behavior, but we'll just treat it as
+                            // a literal dollar.
+                            self.bump();
+                            WordSgmt::Lit('$'.into())
+                        }
+                        _ => todo!(),
+                    }
                 }
                 _ => {
                     if let Some(lit) = self.lit("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\r\n") {

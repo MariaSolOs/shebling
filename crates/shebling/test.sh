@@ -1,3 +1,7 @@
 #!/bin/bash
 
-echo \$1
+x=$(
+    # A comment
+    ls
+)
+echo $x
