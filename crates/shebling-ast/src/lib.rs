@@ -74,8 +74,6 @@ pub enum ControlOp {
     Newline,
     /// `|`
     Or,
-    /// `|&`
-    OrAnd,
     /// `||`
     OrIf,
     /// `;`

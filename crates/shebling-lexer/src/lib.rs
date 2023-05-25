@@ -235,10 +235,10 @@ impl<'a> Lexer<'a> {
                 } else {
                     ControlOp::Semi
                 }),
-                '|' => Token::ControlOp(match self.peek_bump(|c| matches!(c, '&' | '|')) {
-                    Some('&') => ControlOp::OrAnd,
-                    Some('|') => ControlOp::OrIf,
-                    _ => ControlOp::Or,
+                '|' => Token::ControlOp(if self.peek_bump(|c| c == '|').is_some() {
+                    ControlOp::OrIf
+                } else {
+                    ControlOp::Or
                 }),
                 '\n' => Token::ControlOp(ControlOp::Newline),
                 '\r' if self.peek2().is_some_and(|c| c == '\n') => {
