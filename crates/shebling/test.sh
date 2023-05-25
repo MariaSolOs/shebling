@@ -1,3 +1,3 @@
 #!/bin/bash
 
-$'Hola!'
+echo \$1

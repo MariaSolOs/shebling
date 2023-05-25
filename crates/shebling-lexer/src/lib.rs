@@ -1,8 +1,10 @@
+#[cfg(test)]
+mod tests;
+
 use std::str::Chars;
 
 use shebling_ast::{ControlOp, RedirOp, Span, Spanned};
 
-// TODO: Use itertools?
 // TODO: Document types and function logic.
 #[derive(Debug, PartialEq)]
 pub enum Token {

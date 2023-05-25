@@ -1,8 +1,8 @@
 use std::fmt;
 
-// TODO: Document.
-
 // region: Token location.
+/// Range of a token in the source code. Represented by the start and end
+/// byte offsets.
 #[derive(PartialEq)]
 pub struct Span {
     start: usize,
@@ -10,6 +10,7 @@ pub struct Span {
 }
 
 impl Span {
+    /// Creates a new span.
     pub fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
@@ -21,16 +22,14 @@ impl fmt::Debug for Span {
     }
 }
 
+/// A token/AST node together with its [Span].
 #[derive(Debug, PartialEq)]
 pub struct Spanned<T>(T, Span);
 
 impl<T> Spanned<T> {
-    pub fn new(token: T, span: Span) -> Self {
-        Self(token, span)
-    }
-
-    pub fn token(&self) -> &T {
-        &self.0
+    /// Creates a new spanned object.
+    pub fn new(t: T, span: Span) -> Self {
+        Self(t, span)
     }
 }
 // endregion
