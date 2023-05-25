@@ -1,8 +1,6 @@
 use clap::{CommandFactory, Parser};
 use std::{fs, path::PathBuf, sync::Arc};
 
-use shebling_lexer::Lexer;
-
 // TODO: Default values?
 #[derive(clap::Parser)]
 #[command(
@@ -29,8 +27,7 @@ fn main() {
     let file_path = args.path.to_string_lossy();
     match fs::read_to_string(&args.path) {
         Ok(source) => {
-            let lexer = Lexer::new(&source);
-            let (tokens, diags) = lexer.tokenize();
+            let (tokens, diags) = shebling_lexer::tokenize_source(&source);
             println!("TOKENS: {:#?}", tokens);
 
             // HACK: When reporting errors, we add a newline to the end of the source
@@ -48,6 +45,7 @@ fn main() {
             });
         }
         Err(err) => {
+            // TODO: Use miette here.
             let mut cmd = Args::command();
             cmd.error(
                 clap::error::ErrorKind::Io,

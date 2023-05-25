@@ -1,6 +1,3 @@
-// TODO: Remove this after development.
-#![allow(dead_code)]
-
 use std::str::Chars;
 
 use shebling_ast::{ControlOp, RedirOp, Span, Spanned};
@@ -47,14 +44,14 @@ pub enum LexerDiagnostic {
     Unclosed(#[label("missing closing '{2}'")] usize, &'static str, char),
 }
 
-pub struct Lexer<'a> {
+struct Lexer<'a> {
     chars: Chars<'a>,
     source_len: usize,
     diags: Vec<LexerDiagnostic>,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str) -> Self {
+    fn new(source: &'a str) -> Self {
         Lexer {
             chars: source.chars(),
             source_len: source.len(),
@@ -62,7 +59,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
+    fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
         let mut tokens = Vec::new();
 
         // Eat any starting whitespace.
@@ -86,10 +83,37 @@ impl<'a> Lexer<'a> {
         self.eat_while(|c| matches!(c, ' ' | '\t'));
     }
 
-    fn cmd_sub_or_arith(&mut self) -> WordSgmt {
-        assert!(self.bump().is_some_and(|c| c == '('));
+    fn control_op(&mut self) -> Token {
+        let op = match self
+            .bump()
+            .expect("tokenize() should have peeked something")
+        {
+            '&' => {
+                if self.peek_bump(|c| c == '&').is_some() {
+                    ControlOp::AndIf
+                } else {
+                    ControlOp::And
+                }
+            }
+            ';' => {
+                if self.peek_bump(|c| c == ';').is_some() {
+                    ControlOp::DSemi
+                } else {
+                    ControlOp::Semi
+                }
+            }
+            '|' => {
+                if self.peek_bump(|c| c == '|').is_some() {
+                    ControlOp::OrIf
+                } else {
+                    ControlOp::Or
+                }
+            }
+            '\n' => ControlOp::Newline,
+            _ => unreachable!("tokenize() should have peeked an operator prefix."),
+        };
 
-        todo!()
+        Token::ControlOp(op)
     }
 
     fn double_quoted(&mut self) -> WordSgmt {
@@ -167,8 +191,33 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn param_expansion(&mut self) -> WordSgmt {
-        todo!()
+    fn redir_op(&mut self) -> Token {
+        let op = match self
+            .bump()
+            .expect("tokenize() should have peeked something")
+        {
+            '<' => match self.peek_bump(|c| matches!(c, '<' | '&' | '>')) {
+                Some('<') => {
+                    if self.peek_bump(|c| c == '-').is_some() {
+                        RedirOp::DLessDash
+                    } else {
+                        RedirOp::DLess
+                    }
+                }
+                Some('&') => RedirOp::LessAnd,
+                Some('>') => RedirOp::LessGreat,
+                _ => RedirOp::Less,
+            },
+            '>' => match self.peek_bump(|c| matches!(c, '|' | '>' | '&')) {
+                Some('|') => RedirOp::Clobber,
+                Some('>') => RedirOp::DGreat,
+                Some('&') => RedirOp::GreatAnd,
+                _ => RedirOp::Great,
+            },
+            _ => unreachable!("tokenize() should have peeked an operator prefix."),
+        };
+
+        Token::RedirOp(op)
     }
 
     fn single_quoted(&mut self) -> WordSgmt {
@@ -198,33 +247,7 @@ impl<'a> Lexer<'a> {
 
             let token = match c {
                 // Control operators:
-                '&' => Token::ControlOp(if self.peek_bump(|c| c == '&').is_some() {
-                    ControlOp::AndIf
-                } else {
-                    ControlOp::And
-                }),
-                ';' => Token::ControlOp(if self.peek_bump(|c| c == ';').is_some() {
-                    ControlOp::DSemi
-                } else {
-                    ControlOp::Semi
-                }),
-                '|' => Token::ControlOp(if self.peek_bump(|c| c == '|').is_some() {
-                    ControlOp::OrIf
-                } else {
-                    ControlOp::Or
-                }),
-                '(' => {
-                    self.bump();
-                    Token::ControlOp(ControlOp::LParen)
-                }
-                ')' => {
-                    self.bump();
-                    Token::ControlOp(ControlOp::RParen)
-                }
-                '\n' => {
-                    self.bump();
-                    Token::ControlOp(ControlOp::Newline)
-                }
+                '&' | ';' | '|' | '\n' => self.control_op(),
                 '\r' if self.peek2().is_some_and(|c| c == '\n') => {
                     // Special case for CRLF line endings, which we
                     // leniently read as new lines.
@@ -232,27 +255,18 @@ impl<'a> Lexer<'a> {
 
                     self.bump();
                     start = self.position();
+                    self.bump();
 
                     Token::ControlOp(ControlOp::Newline)
                 }
+
                 // Redirection operators:
-                '<' => Token::RedirOp(match self.peek_bump(|c| matches!(c, '<' | '&' | '>')) {
-                    Some('<') => match self.peek_bump(|c| matches!(c, '_' | '<')) {
-                        Some('-') => RedirOp::DLessDash,
-                        Some('<') => RedirOp::TLess,
-                        _ => RedirOp::DLess,
-                    },
-                    Some('&') => RedirOp::LessAnd,
-                    Some('>') => RedirOp::LessGreat,
-                    _ => RedirOp::Less,
-                }),
-                '>' => Token::RedirOp(match self.peek_bump(|c| matches!(c, '|' | '>' | '&')) {
-                    Some('|') => RedirOp::Clobber,
-                    Some('>') => RedirOp::DGreat,
-                    Some('&') => RedirOp::GreatAnd,
-                    _ => RedirOp::Great,
-                }),
+                '<' | '>' => self.redir_op(),
+
+                // Comments:
                 '#' => Token::Comment(self.eat_while(|c| c != '\n')),
+
+                // Words:
                 _ => {
                     if let Some(word) = self.word() {
                         word
@@ -282,19 +296,20 @@ impl<'a> Lexer<'a> {
                 '"' => self.double_quoted(),
                 '\'' => self.single_quoted(),
                 '$' => {
-                    self.bump();
+                    todo!()
+                    // self.bump();
 
-                    match self.peek() {
-                        Some('"') => self.double_quoted(),
-                        Some('\'') => self.single_quoted(),
-                        Some('(') => self.cmd_sub_or_arith(),
-                        Some(_) => self.param_expansion(),
-                        None => {
-                            // This is technically undefined behavior, but we'll just treat it as
-                            // a literal dollar.
-                            WordSgmt::Lit('$'.into())
-                        }
-                    }
+                    // match self.peek() {
+                    //     Some('"') => self.double_quoted(),
+                    //     Some('\'') => self.single_quoted(),
+                    //     Some('(') => self.cmd_sub_or_arith(),
+                    //     Some(_) => self.param_expansion(),
+                    //     None => {
+                    //         // This is technically undefined behavior, but we'll just treat it as
+                    //         // a literal dollar.
+                    //         WordSgmt::Lit('$'.into())
+                    //     }
+                    // }
                 }
                 _ => {
                     if let Some(lit) = self.lit("|&;<>()$`\\\"' \t\n", "#|&;<>()$`\"' \t\r\n") {
@@ -361,4 +376,8 @@ impl<'a> Lexer<'a> {
         Span::new(start, self.position())
     }
     // endregion
+}
+
+pub fn tokenize_source(source: &str) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
+    Lexer::new(source).tokenize()
 }
