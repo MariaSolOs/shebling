@@ -11,9 +11,7 @@ use shebling_ast::{ControlOp, RedirOp, Span, Spanned};
 pub enum Token {
     Comment(String),
     ControlOp(ControlOp),
-    LParen,
     RedirOp(RedirOp),
-    RParen,
     Word(Vec<Spanned<WordSgmt>>),
 }
 
@@ -91,32 +89,7 @@ impl<'a> Lexer<'a> {
     fn cmd_sub_or_arith(&mut self) -> WordSgmt {
         assert!(self.bump().is_some_and(|c| c == '('));
 
-        // TODO: First try to read an arithmetic expression.
-
-        let mut tokens = Vec::new();
-        while let Some(token) = self.token() {
-            if *token.token() == Token::RParen {
-                return WordSgmt::CmdSub {
-                    tokens,
-                    closed: true,
-                };
-            } else {
-                tokens.push(token);
-                self.blanks();
-            }
-        }
-
-        // If we get here, we didn't find the closing paren.
-        self.diags.push(LexerDiagnostic::Unclosed(
-            self.position(),
-            "command substitution",
-            ')',
-        ));
-
-        WordSgmt::CmdSub {
-            tokens,
-            closed: false,
-        }
+        todo!()
     }
 
     fn double_quoted(&mut self) -> WordSgmt {
@@ -240,7 +213,14 @@ impl<'a> Lexer<'a> {
                 } else {
                     ControlOp::Or
                 }),
-                '\n' => Token::ControlOp(ControlOp::Newline),
+                '(' => {
+                    self.bump();
+                    Token::ControlOp(ControlOp::LParen)
+                }
+                ')' => {
+                    self.bump();
+                    Token::ControlOp(ControlOp::RParen)
+                }
                 '\r' if self.peek2().is_some_and(|c| c == '\n') => {
                     // Special case for CRLF line endings, which we
                     // leniently read as new lines.
@@ -269,14 +249,6 @@ impl<'a> Lexer<'a> {
                     _ => RedirOp::Great,
                 }),
                 '#' => Token::Comment(self.eat_while(|c| c != '\n')),
-                '(' => {
-                    self.bump();
-                    Token::LParen
-                }
-                ')' => {
-                    self.bump();
-                    Token::RParen
-                }
                 _ => {
                     if let Some(word) = self.word() {
                         word

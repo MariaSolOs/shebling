@@ -63,6 +63,7 @@ pub enum RedirOp {
 
 // region: Commands.
 #[derive(Debug, PartialEq)]
+/// Token that performs a control function.
 pub enum ControlOp {
     /// `&`
     And,
@@ -70,12 +71,16 @@ pub enum ControlOp {
     AndIf,
     /// `;;`
     DSemi,
+    /// `(`
+    LParen,
     /// `\n`
     Newline,
     /// `|`
     Or,
     /// `||`
     OrIf,
+    /// `)`
+    RParen,
     /// `;`
     Semi,
 }
