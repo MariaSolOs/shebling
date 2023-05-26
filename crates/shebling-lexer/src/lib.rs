@@ -49,27 +49,25 @@ struct Lexer<'a> {
     diags: Vec<LexerDiagnostic>,
 }
 
+// TODO: Inline the functions I just use once.
+
 impl<'a> Lexer<'a> {
     fn new(source: &'a str) -> Self {
         Lexer {
             chars: source.chars(),
             source_len: source.len(),
-            diags: Vec::new(),
+            diags: vec![],
         }
     }
 
     fn tokenize(mut self) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {
-        let mut tokens = Vec::new();
+        let mut tokens = vec![];
 
         // TODO: Process shebang.
 
-        // Eat any starting whitespace.
         self.blanks();
-
         while let Some(token) = self.token() {
             tokens.push(token);
-
-            // Consume trailing whitespace after each token.
             self.blanks();
         }
 
@@ -90,21 +88,21 @@ impl<'a> Lexer<'a> {
             .expect("tokenize() should have peeked something")
         {
             '&' => {
-                if self.peek_bump(|c| c == '&').is_some() {
+                if self.bumped('&') {
                     ControlOp::AndIf
                 } else {
                     ControlOp::And
                 }
             }
             ';' => {
-                if self.peek_bump(|c| c == ';').is_some() {
+                if self.bumped(';') {
                     ControlOp::DSemi
                 } else {
                     ControlOp::Semi
                 }
             }
             '|' => {
-                if self.peek_bump(|c| c == '|').is_some() {
+                if self.bumped('|') {
                     ControlOp::OrIf
                 } else {
                     ControlOp::Or
@@ -119,11 +117,11 @@ impl<'a> Lexer<'a> {
 
     fn double_quoted(&mut self) -> WordSgmt {
         // Check if this is a translated string.
-        let translated = self.peek_bump(|c| c == '$').is_some();
+        let translated = self.bumped('$');
 
-        assert!(self.bump().is_some_and(|c| c == '"'));
-        let mut sgmts = Vec::new();
+        assert!(self.bumped('"'));
 
+        let mut sgmts = vec![];
         while let Some(c) = self.peek() {
             let sgmt_start = self.position();
 
@@ -178,14 +176,14 @@ impl<'a> Lexer<'a> {
                         // Either a line continuation or a lonely backslash. Either way,
                         // don't add anything to the literal.
                     }
-                    Some(c) => {
-                        if !can_escape.contains(c) {
+                    Some(escaped) => {
+                        if !can_escape.contains(escaped) {
                             lit.push('\\');
                         }
-                        lit.push(c);
+                        lit.push(escaped);
                     }
                 },
-                c => lit.push(c),
+                _ => lit.push(c),
             };
         }
 
@@ -203,7 +201,7 @@ impl<'a> Lexer<'a> {
         {
             '<' => match self.peek_bump(|c| matches!(c, '<' | '&' | '>')) {
                 Some('<') => {
-                    if self.peek_bump(|c| c == '-').is_some() {
+                    if self.bumped('-') {
                         RedirOp::DLessDash
                     } else {
                         RedirOp::DLess
@@ -227,9 +225,9 @@ impl<'a> Lexer<'a> {
 
     fn single_quoted(&mut self) -> WordSgmt {
         // Check if this is an ANSI-C quoted string.
-        let ansi_c_quoted = self.peek_bump(|c| c == '$').is_some();
+        let ansi_c_quoted = self.bumped('$');
 
-        assert!(self.bump().is_some_and(|c| c == '\''));
+        assert!(self.bumped('\''));
         let string = self.eat_while(|c| c != '\'');
 
         WordSgmt::SingleQuoted {
@@ -254,7 +252,6 @@ impl<'a> Lexer<'a> {
             let mut start = self.position();
 
             let token = match c {
-                // Control operators:
                 '&' | ';' | '|' | '\n' => self.control_op(),
                 '\r' if self.peek2().is_some_and(|c| c == '\n') => {
                     // Special case for CRLF line endings, which we
@@ -267,14 +264,8 @@ impl<'a> Lexer<'a> {
 
                     Token::ControlOp(ControlOp::Newline)
                 }
-
-                // Redirection operators:
                 '<' | '>' => self.redir_op(),
-
-                // Comments:
                 '#' => Token::Comment(self.eat_while(|c| c != '\n')),
-
-                // Words:
                 _ => {
                     if let Some(word) = self.word() {
                         word
@@ -295,7 +286,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn word(&mut self) -> Option<Token> {
-        let mut word = Vec::new();
+        let mut word = vec![];
 
         while let Some(c) = self.peek() {
             let sgmt_start = self.position();
@@ -339,6 +330,10 @@ impl<'a> Lexer<'a> {
     // region: "Cursor" utilities.
     fn bump(&mut self) -> Option<char> {
         self.chars.next()
+    }
+
+    fn bumped(&mut self, expecting: char) -> bool {
+        self.peek_bump(|c| c == expecting).is_some()
     }
 
     fn eat_while(&mut self, condition: impl Fn(char) -> bool) -> String {
