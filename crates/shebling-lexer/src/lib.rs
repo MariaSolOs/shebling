@@ -1,9 +1,11 @@
 #[cfg(test)]
 mod tests;
 
-use std::str::Chars;
+mod diagnostic;
 
+use diagnostic::{LexerDiagnostic, LexerDiagnosticKind};
 use shebling_ast::{ControlOp, RedirOp, Span, Spanned};
+use std::str::Chars;
 
 // TODO: Document types and function logic.
 #[derive(Debug, PartialEq)]
@@ -27,20 +29,6 @@ pub enum WordSgmt {
         ansi_c_quoted: bool,
         closed: bool,
     },
-}
-
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
-pub enum LexerDiagnostic {
-    #[error("CRLF line ending!")]
-    #[diagnostic(
-        code(shebling::cr_lf),
-        help("Try running the script through tr -d '\\r'.")
-    )]
-    CrLf(#[label("literal carriage return")] usize),
-
-    #[error("unclosed {1}!")]
-    #[diagnostic(code(shebling::unclosed_word))]
-    UnclosedWord(#[label("missing closing '{2}'")] usize, &'static str, char),
 }
 
 struct Lexer<'a> {
@@ -115,6 +103,15 @@ impl<'a> Lexer<'a> {
         Token::ControlOp(op)
     }
 
+    fn cr_lf_check(&mut self) {
+        if self.peek().is_some_and(|c| c == '\r') && self.peek2().is_some_and(|c| c == '\n') {
+            // Special case for CRLF line endings, which we leniently read
+            // later as new lines.
+            self.report_diag(LexerDiagnosticKind::CrLf, "literal carriage return");
+            self.bump();
+        }
+    }
+
     fn double_quoted(&mut self) -> WordSgmt {
         // Check if this is a translated string.
         let translated = self.bumped('$');
@@ -156,11 +153,10 @@ impl<'a> Lexer<'a> {
                 assert!(c == '"');
                 true
             } else {
-                self.diags.push(LexerDiagnostic::UnclosedWord(
-                    self.position(),
-                    "double quoted string",
-                    '"',
-                ));
+                self.report_diag(
+                    LexerDiagnosticKind::UnclosedWord("double quoted string"),
+                    "missing closing '\"'",
+                );
                 false
             },
         }
@@ -237,33 +233,22 @@ impl<'a> Lexer<'a> {
                 assert!(c == '\'');
                 true
             } else {
-                self.diags.push(LexerDiagnostic::UnclosedWord(
-                    self.position(),
-                    "single quoted string",
-                    '\'',
-                ));
+                self.report_diag(
+                    LexerDiagnosticKind::UnclosedWord("single quoted string"),
+                    "missing closing '''",
+                );
                 false
             },
         }
     }
 
     fn token(&mut self) -> Option<Spanned<Token>> {
-        if let Some(c) = self.peek() {
-            let mut start = self.position();
+        self.cr_lf_check();
 
+        if let Some(c) = self.peek() {
+            let start = self.position();
             let token = match c {
                 '&' | ';' | '|' | '\n' => self.control_op(),
-                '\r' if self.peek2().is_some_and(|c| c == '\n') => {
-                    // Special case for CRLF line endings, which we
-                    // leniently read as new lines.
-                    self.diags.push(LexerDiagnostic::CrLf(start));
-
-                    self.bump();
-                    start = self.position();
-                    self.bump();
-
-                    Token::ControlOp(ControlOp::Newline)
-                }
                 '<' | '>' => self.redir_op(),
                 '#' => Token::Comment(self.eat_while(|c| c != '\n')),
                 _ => {
@@ -376,6 +361,11 @@ impl<'a> Lexer<'a> {
         Span::new(start, self.position())
     }
     // endregion
+
+    fn report_diag(&mut self, kind: LexerDiagnosticKind, label: &'static str) {
+        self.diags
+            .push(LexerDiagnostic::new(kind, self.position(), label));
+    }
 }
 
 pub fn tokenize_source(source: &str) -> (Vec<Spanned<Token>>, Vec<LexerDiagnostic>) {

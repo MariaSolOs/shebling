@@ -29,6 +29,7 @@ fn main() {
         Ok(source) => {
             let (tokens, diags) = shebling_lexer::tokenize_source(&source);
             println!("TOKENS: {:#?}", tokens);
+            println!("DIAGS: {:#?}", diags);
 
             // HACK: When reporting errors, we add a newline to the end of the source
             // so that miette can highlight the last character.
