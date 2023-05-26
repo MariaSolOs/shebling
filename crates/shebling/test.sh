@@ -1,7 +1,3 @@
 #!/bin/bash
 
-x=$(
-    # A comment
-    ls
-)
-echo $x
+`foo\`bar\`"foooo`

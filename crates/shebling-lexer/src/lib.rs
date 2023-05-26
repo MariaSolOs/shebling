@@ -18,6 +18,11 @@ pub enum Token {
 
 #[derive(Debug, PartialEq)]
 pub enum WordSgmt {
+    CmdExpansion {
+        tokens: Vec<Spanned<Token>>,
+        backquoted: bool,
+        closed: bool,
+    },
     DoubleQuoted {
         sgmts: Vec<Spanned<WordSgmt>>,
         translated: bool,
@@ -34,6 +39,7 @@ pub enum WordSgmt {
 struct Lexer<'a> {
     chars: Chars<'a>,
     source_len: usize,
+    offset: usize,
     diags: Vec<LexerDiagnostic>,
 }
 
@@ -41,9 +47,14 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn new(source: &'a str) -> Self {
+        Self::with_offset(source, 0)
+    }
+
+    fn with_offset(source: &'a str, offset: usize) -> Self {
         Lexer {
             chars: source.chars(),
             source_len: source.len(),
+            offset,
             diags: vec![],
         }
     }
@@ -66,6 +77,43 @@ impl<'a> Lexer<'a> {
     }
 
     // region: Individual tokenizers.
+    fn backquoted(&mut self, escape_double_quotes: bool) -> WordSgmt {
+        assert!(self.bumped('`'));
+
+        // Read the inner command.
+        // Note that positions might be off because of the escapes. But
+        // backticks are deprecated anyway, so we'll let it be.
+        let offset = self.position();
+        let (tokens, diags) = self
+            .lit(
+                if escape_double_quotes {
+                    "$`\\\""
+                } else {
+                    "$`\\"
+                },
+                "`",
+            )
+            .map_or((vec![], vec![]), |cmd| {
+                Lexer::with_offset(&cmd, offset).tokenize()
+            });
+        self.diags.extend(diags);
+
+        WordSgmt::CmdExpansion {
+            tokens,
+            backquoted: true,
+            closed: if let Some(c) = self.bump() {
+                assert!(c == '`');
+                true
+            } else {
+                self.report_diag(
+                    LexerDiagnosticKind::UnclosedWord("backquoted string"),
+                    "missing closing '`'",
+                );
+                false
+            },
+        }
+    }
+
     fn blanks(&mut self) {
         self.eat_while(|c| matches!(c, ' ' | '\t'));
     }
@@ -103,15 +151,6 @@ impl<'a> Lexer<'a> {
         Token::ControlOp(op)
     }
 
-    fn cr_lf_check(&mut self) {
-        if self.peek().is_some_and(|c| c == '\r') && self.peek2().is_some_and(|c| c == '\n') {
-            // Special case for CRLF line endings, which we leniently read
-            // later as new lines.
-            self.report_diag(LexerDiagnosticKind::CrLf, "literal carriage return");
-            self.bump();
-        }
-    }
-
     fn double_quoted(&mut self) -> WordSgmt {
         // Check if this is a translated string.
         let translated = self.bumped('$');
@@ -138,7 +177,7 @@ impl<'a> Lexer<'a> {
                             _ => todo!(),
                         }
                     }
-                    '`' => todo!(),
+                    '`' => self.backquoted(true),
                     _ => unreachable!("lit() should have consumed '{}'", c),
                 }
             };
@@ -243,7 +282,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn token(&mut self) -> Option<Spanned<Token>> {
-        self.cr_lf_check();
+        if self.peek().is_some_and(|c| c == '\r') && self.peek2().is_some_and(|c| c == '\n') {
+            // Special case for CRLF line endings, which we leniently read
+            // later as new lines.
+            self.report_diag(LexerDiagnosticKind::CrLf, "literal carriage return");
+            self.bump();
+        }
 
         if let Some(c) = self.peek() {
             let start = self.position();
@@ -279,6 +323,7 @@ impl<'a> Lexer<'a> {
             let sgmt = match c {
                 '"' => self.double_quoted(),
                 '\'' => self.single_quoted(),
+                '`' => self.backquoted(false),
                 '$' => {
                     match self.peek2() {
                         Some('"') => self.double_quoted(),
@@ -352,7 +397,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn position(&self) -> usize {
-        self.source_len - self.chars.as_str().len()
+        self.source_len - self.chars.as_str().len() + self.offset
     }
 
     fn capture_span(&self, start: usize) -> Span {
