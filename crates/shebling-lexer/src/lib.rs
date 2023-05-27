@@ -86,7 +86,9 @@ impl<'a> Lexer<'a> {
         while let Some(mut c) = self.peek_bump(|c| c != '`') {
             if c == '\\' {
                 if let Some(escaped) = self.bump() {
-                    if !(matches!(escaped, '$' | '`' | '\\') || escape_double_quotes && c == '"') {
+                    if !(matches!(escaped, '$' | '`' | '\\')
+                        || escape_double_quotes && escaped == '"')
+                    {
                         cmd.push('\\');
                     }
 
