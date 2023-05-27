@@ -1,9 +1,7 @@
-use std::fmt;
-
 // region: Token location.
 /// Range of a token in the source code. Represented by the start and end
 /// byte offsets.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Span {
     start: usize,
     end: usize,
@@ -13,12 +11,6 @@ impl Span {
     /// Creates a new span.
     pub fn new(start: usize, end: usize) -> Self {
         Self { start, end }
-    }
-}
-
-impl fmt::Debug for Span {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}..{}", self.start, self.end)
     }
 }
 

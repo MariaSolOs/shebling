@@ -9,6 +9,14 @@ license = "Apache-2.0"
 
 [dependencies]
 miette = { workspace = true }
-pretty_assertions = { workspace = true }
 shebling-ast = { version = "0.0.0", path = "../shebling-ast" }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+insta = "1.29.0"
+
+# Testing optimizations
+[profile.dev.package.insta]
+opt-level = 3
+[profile.dev.package.similar]
+opt-level = 3
