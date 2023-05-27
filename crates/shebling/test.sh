@@ -1,3 +1,2 @@
-#!/bin/bash
-
-`foo\`bar\`"foooo`
+`foo\
+\`bar\``

@@ -80,22 +80,31 @@ impl<'a> Lexer<'a> {
     fn backquoted(&mut self, escape_double_quotes: bool) -> WordSgmt {
         assert!(self.bumped('`'));
 
+        // Unescape the input to subparse.
+        let start = self.position();
+        let mut cmd = String::new();
+        while let Some(mut c) = self.peek_bump(|c| c != '`') {
+            if c == '\\' {
+                if let Some(escaped) = self.bump() {
+                    if !(matches!(escaped, '$' | '`' | '\\') || escape_double_quotes && c == '"') {
+                        cmd.push('\\');
+                    }
+
+                    c = escaped;
+                }
+            }
+
+            cmd.push(c);
+        }
+
         // Read the inner command.
         // Note that positions might be off because of the escapes. But
         // backticks are deprecated anyway, so we'll let it be.
-        let offset = self.position();
-        let (tokens, diags) = self
-            .lit(
-                if escape_double_quotes {
-                    "$`\\\""
-                } else {
-                    "$`\\"
-                },
-                "`",
-            )
-            .map_or((vec![], vec![]), |cmd| {
-                Lexer::with_offset(&cmd, offset).tokenize()
-            });
+        let (tokens, diags) = if cmd.is_empty() {
+            (vec![], vec![])
+        } else {
+            Lexer::with_offset(&cmd, start).tokenize()
+        };
         self.diags.extend(diags);
 
         WordSgmt::CmdExpansion {
