@@ -1,4 +1,4 @@
-// region: Token location.
+// region: Token location
 /// Range of a token in the source code. Represented by the start and end
 /// byte offsets.
 #[derive(Debug, PartialEq)]
@@ -26,7 +26,26 @@ impl<T> Spanned<T> {
 }
 // endregion
 
-// region: Redirections.
+// region: Words
+/// Sequence of [word segments](WordSgmt) treated as a unit by the shell.
+#[derive(Debug)]
+pub struct Word(Vec<Spanned<WordSgmt>>);
+
+impl Word {
+    /// Creates a new [Word] containing the given [segments](WordSgmt).
+    pub fn new(sgmts: Vec<Spanned<WordSgmt>>) -> Self {
+        Self(sgmts)
+    }
+}
+
+#[derive(Debug)]
+pub enum WordSgmt {
+    /// Single quoted string.
+    SingleQuoted { string: String, ansi_c_quoted: bool },
+}
+// endregion
+
+// region: Redirections
 /// Token that performs a redirection function.
 #[derive(Debug, PartialEq)]
 pub enum RedirOp {
@@ -51,7 +70,7 @@ pub enum RedirOp {
 }
 // endregion
 
-// region: Commands.
+// region: Commands
 #[derive(Debug, PartialEq)]
 /// Token that performs a control function.
 pub enum ControlOp {

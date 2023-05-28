@@ -14,16 +14,21 @@ impl<'a> Cursor<'a> {
         Self {
             chars: source.chars(),
             source_len: source.len(),
-            diags: vec![],
+            diags: Vec::new(),
         }
     }
 
-    fn bump(&mut self) -> Option<char> {
+    pub(crate) fn bump(&mut self) -> Option<char> {
         self.chars.next()
     }
 
-    pub(crate) fn bumped(&mut self, expecting: char) -> bool {
-        self.peek_bump(|c| c == expecting).is_some()
+    pub(crate) fn bumped(&mut self, expected: char) -> bool {
+        self.peek_bump(|c| c == expected).is_some()
+    }
+
+    pub(crate) fn diag(&mut self, kind: ParseDiagnosticKind, label: &'static str) {
+        self.diags
+            .push(ParseDiagnostic::new(kind, self.position(), label));
     }
 
     pub(crate) fn eat_while(&mut self, condition: impl Fn(char) -> bool) -> String {
@@ -36,8 +41,16 @@ impl<'a> Cursor<'a> {
         eaten
     }
 
-    fn peek(&self) -> Option<char> {
+    pub(crate) fn into_remaining_diags(self) -> (&'a str, Vec<ParseDiagnostic>) {
+        (self.chars.as_str(), self.diags)
+    }
+
+    pub(crate) fn peek(&self) -> Option<char> {
         self.chars.clone().next()
+    }
+
+    pub(crate) fn position(&self) -> usize {
+        self.source_len - self.chars.as_str().len()
     }
 
     fn peek_bump(&mut self, condition: impl Fn(char) -> bool) -> Option<char> {
@@ -48,14 +61,5 @@ impl<'a> Cursor<'a> {
         } else {
             None
         }
-    }
-
-    fn position(&self) -> usize {
-        self.source_len - self.chars.as_str().len()
-    }
-
-    pub(crate) fn diag(&mut self, kind: ParseDiagnosticKind, label: &'static str) {
-        self.diags
-            .push(ParseDiagnostic::new(kind, self.position(), label));
     }
 }
