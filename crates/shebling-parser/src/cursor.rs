@@ -2,7 +2,7 @@ use std::str::Chars;
 
 use crate::diagnostic::{ParseDiagnostic, ParseDiagnosticKind};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Cursor<'a> {
     chars: Chars<'a>,
     source_len: usize,
@@ -49,11 +49,7 @@ impl<'a> Cursor<'a> {
         self.chars.clone().next()
     }
 
-    pub(crate) fn position(&self) -> usize {
-        self.source_len - self.chars.as_str().len()
-    }
-
-    fn peek_bump(&mut self, condition: impl Fn(char) -> bool) -> Option<char> {
+    pub(crate) fn peek_bump(&mut self, condition: impl Fn(char) -> bool) -> Option<char> {
         let c = self.peek()?;
 
         if condition(c) {
@@ -61,5 +57,9 @@ impl<'a> Cursor<'a> {
         } else {
             None
         }
+    }
+
+    pub(crate) fn position(&self) -> usize {
+        self.source_len - self.chars.as_str().len()
     }
 }

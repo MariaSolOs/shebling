@@ -1,6 +1,6 @@
 use std::{fmt, iter};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 #[error("{kind}")]
 pub(crate) struct ParseDiagnostic {
     kind: ParseDiagnosticKind,
@@ -39,7 +39,7 @@ impl miette::Diagnostic for ParseDiagnostic {
     }
 }
 
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[derive(Clone, Debug, thiserror::Error, miette::Diagnostic)]
 pub(crate) enum ParseDiagnosticKind {
     #[error("unclosed {0} string!")]
     #[diagnostic(code(shebling::unclosed_string))]

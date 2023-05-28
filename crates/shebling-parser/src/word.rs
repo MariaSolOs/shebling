@@ -1,32 +1,37 @@
 use super::*;
 
-// fn lit(&mut self, can_escape: &str, stop_with: &str) -> Option<String> {
-//     let mut lit = String::new();
+fn lit(
+    can_escape: &'static str,
+    stop_with: &'static str,
+) -> impl Fn(Cursor) -> ParseResult<String> {
+    |mut cursor| {
+        let mut lit = String::new();
 
-//     while let Some(c) = self.peek_bump(|c| !stop_with.contains(c)) {
-//         match c {
-//             '\\' => match self.bump() {
-//                 Some('\n') | None => {
-//                     // Either a line continuation or a lonely backslash. Either way,
-//                     // don't add anything to the literal.
-//                 }
-//                 Some(escaped) => {
-//                     if !can_escape.contains(escaped) {
-//                         lit.push('\\');
-//                     }
-//                     lit.push(escaped);
-//                 }
-//             },
-//             _ => lit.push(c),
-//         };
-//     }
+        while let Some(c) = cursor.peek_bump(|c| !stop_with.contains(c)) {
+            match c {
+                '\\' => match cursor.bump() {
+                    Some('\n') | None => {
+                        // Either a line continuation or a lonely backslash. Either way,
+                        // don't add anything to the literal.
+                    }
+                    Some(escaped) => {
+                        if !can_escape.contains(escaped) {
+                            lit.push('\\');
+                        }
+                        lit.push(escaped);
+                    }
+                },
+                _ => lit.push(c),
+            };
+        }
 
-//     if lit.is_empty() {
-//         None
-//     } else {
-//         Some(lit)
-//     }
-// }
+        if lit.is_empty() {
+            Err(cursor)
+        } else {
+            Ok((cursor, lit))
+        }
+    }
+}
 
 fn single_quoted(mut cursor: Cursor) -> ParseResult<String> {
     if !cursor.bumped('\'') {
@@ -46,7 +51,7 @@ fn single_quoted(mut cursor: Cursor) -> ParseResult<String> {
 }
 
 pub(crate) fn word(mut cursor: Cursor) -> ParseResult<Word> {
-    let mut sgmts = vec![];
+    let mut sgmts = Vec::new();
 
     while let Some(c) = cursor.peek() {
         let start = cursor.position();
@@ -67,7 +72,13 @@ pub(crate) fn word(mut cursor: Cursor) -> ParseResult<Word> {
                     _ => todo!(),
                 }
             }
-            _ => break,
+            _ => {
+                if let Ok((cursor, lit)) = lit("\\$`\"' \t\n", "$`\"' \t\n")(cursor.clone()) {
+                    (cursor, WordSgmt::Lit(lit))
+                } else {
+                    break;
+                }
+            }
         };
         sgmts.push(Spanned::new(sgmt, Span::new(start, cursor.position())));
     }

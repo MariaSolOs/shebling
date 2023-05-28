@@ -40,6 +40,8 @@ impl Word {
 
 #[derive(Debug)]
 pub enum WordSgmt {
+    /// Literal, unquoted string.
+    Lit(String),
     /// Single quoted string.
     SingleQuoted { string: String, ansi_c_quoted: bool },
 }
