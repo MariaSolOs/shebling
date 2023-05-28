@@ -1,50 +1,57 @@
-mod cursor;
+// TODO: Remove all the #[allow(..)] after development.
+// TODO: Document.
+#![allow(dead_code)]
+
+mod ast;
 mod diagnostic;
-mod word;
+mod error;
+mod location;
+mod parser;
 
-use shebling_ast::*;
+use std::cell::RefCell;
 
-use cursor::Cursor;
-use diagnostic::ParseDiagnosticKind;
-use word::word;
+use diagnostic::{ParseDiagnostic, ParseDiagnosticBuilder};
+use location::Span;
 
-pub(crate) type ParseResult<'a, T> = Result<(Cursor<'a>, T), Cursor<'a>>;
-
-pub(crate) fn map<P1, P2, R1, R2>(parser: P1, mapper: P2) -> impl Fn(Cursor) -> ParseResult<R2>
-where
-    P1: Fn(Cursor) -> ParseResult<R1>,
-    P2: Fn(R1) -> R2,
-{
-    move |cursor| parser(cursor).map(|(cursor, res)| (cursor, mapper(res)))
+// region: Parsing context.
+#[derive(Clone, Debug)]
+struct ParseContext {
+    diags: RefCell<Vec<ParseDiagnostic>>,
 }
 
-pub fn parse(file_path: &str, source: &str) {
-    use std::sync::Arc;
-
-    let cursor = Cursor::new(source);
-    match word(cursor) {
-        Ok((cursor, res)) => {
-            let (remaining, diags) = cursor.into_remaining_diags();
-
-            println!("OK RESULT {:#?}", res);
-            println!("OK REMAINING {:#?}", remaining);
-
-            // HACK: When reporting errors, we add a newline to the end of the source
-            // so that miette can highlight the last character.
-            let source = Arc::new(miette::NamedSource::new(
-                file_path,
-                source.to_owned() + "\n",
-            ));
-
-            diags.into_iter().for_each(|err| {
-                println!(
-                    "{:?}",
-                    miette::Report::new(err).with_source_code(Arc::clone(&source))
-                );
-            });
-        }
-        Err(cursor) => {
-            println!("ERR CURSOR {:#?}", cursor);
+impl ParseContext {
+    fn new() -> Self {
+        Self {
+            diags: RefCell::new(Vec::new()),
         }
     }
+
+    fn diag(&self, builder: ParseDiagnosticBuilder) {
+        self.diags.borrow_mut().push(builder.build());
+    }
+
+    fn take_diags(&self) -> Vec<ParseDiagnostic> {
+        self.diags.take()
+    }
+
+    fn extend_diags(&self, other: Self) {
+        self.diags.borrow_mut().extend(other.take_diags());
+    }
+}
+// endregion
+
+fn source_to_span(source_code: &str) -> Span {
+    let context = ParseContext {
+        diags: RefCell::new(Vec::new()),
+    };
+
+    nom_locate::LocatedSpan::new_extra(source_code, context)
+}
+
+#[allow(unused_variables)]
+pub fn parse(file_path: impl AsRef<str>, source_code: &str) {
+    // HACK: When reporting errors, add a newline to the end of the source
+    // so that miette can highlight the last character.
+
+    parser::test(file_path, source_code);
 }

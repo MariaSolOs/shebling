@@ -40,10 +40,22 @@ impl Word {
 
 #[derive(Debug)]
 pub enum WordSgmt {
+    /// Double-quoted string.
+    DoubleQuoted {
+        sgmts: Vec<Spanned<DoubleQuotedSgmt>>,
+        translated: bool,
+    },
+
     /// Literal, unquoted string.
     Lit(String),
+
     /// Single quoted string.
     SingleQuoted { string: String, ansi_c_quoted: bool },
+}
+
+#[derive(Debug)]
+pub enum DoubleQuotedSgmt {
+    Lit(String),
 }
 // endregion
 
@@ -53,20 +65,28 @@ pub enum WordSgmt {
 pub enum RedirOp {
     /// `>|`
     Clobber,
+
     /// `>>`
     DGreat,
+
     /// `<<`
     DLess,
+
     /// `<<-`
     DLessDash,
+
     /// `>`
     Great,
+
     /// `>&`
     GreatAnd,
+
     /// `<`
     Less,
+
     /// `<&`
     LessAnd,
+
     /// `<>`
     LessGreat,
 }
@@ -78,20 +98,28 @@ pub enum RedirOp {
 pub enum ControlOp {
     /// `&`
     And,
+
     /// `&&`
     AndIf,
+
     /// `;;`
     DSemi,
+
     /// `(`
     LParen,
+
     /// `\n`
     Newline,
+
     /// `|`
     Or,
+
     /// `||`
     OrIf,
+
     /// `)`
     RParen,
+
     /// `;`
     Semi,
 }
