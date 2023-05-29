@@ -1,83 +1,33 @@
-use thiserror::Error;
+use crate::span::ParseSpan;
 
-use crate::{
-    diagnostic::ParseDiagnostic,
-    location::{Location, Span},
-};
-
-#[derive(Debug, Error, miette::Diagnostic)]
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
 #[error("parser bailed!")]
 #[diagnostic(code(shebling::parser::fatal), severity("error"))]
 pub(crate) struct ParseError {
     #[label("stopped here")]
-    location: Location,
+    location: usize,
     #[related]
     notes: Vec<ParseErrorNote>,
-    diags: Vec<ParseDiagnostic>,
 }
 
-impl ParseError {
-    pub(crate) fn line(&self) -> u32 {
-        self.location.line()
+impl nom::error::ParseError<ParseSpan<'_>> for ParseError {
+    fn from_error_kind(input: ParseSpan, _kind: nom::error::ErrorKind) -> Self {
+        Self {
+            location: 0,
+            notes: vec![],
+        }
     }
 
-    pub(crate) fn column(&self) -> usize {
-        self.location.column()
-    }
-
-    pub(crate) fn notes(&self) -> &[ParseErrorNote] {
-        &self.notes
-    }
-
-    pub(crate) fn diags(&self) -> &[ParseDiagnostic] {
-        &self.diags
+    fn append(_input: ParseSpan, _kind: nom::error::ErrorKind, other: Self) -> Self {
+        other
     }
 }
 
-#[derive(Clone, Debug, miette::Diagnostic, Error)]
+#[derive(Clone, Debug, thiserror::Error, miette::Diagnostic)]
 #[error("{note}")]
 #[diagnostic(severity("error"))]
 pub(crate) struct ParseErrorNote {
     #[label]
-    location: Location,
+    location: usize,
     note: &'static str,
-}
-
-impl ParseErrorNote {
-    pub(crate) fn line(&self) -> u32 {
-        self.location.line()
-    }
-
-    pub(crate) fn column(&self) -> usize {
-        self.location.column()
-    }
-
-    pub(crate) fn note(&self) -> &'static str {
-        self.note
-    }
-}
-
-impl nom::error::ParseError<Span<'_>> for ParseError {
-    fn from_error_kind(input: Span<'_>, _kind: nom::error::ErrorKind) -> Self {
-        Self {
-            location: Location::from(&input),
-            notes: vec![],
-            diags: input.extra.take_diags(),
-        }
-    }
-
-    fn append(_input: Span<'_>, _kind: nom::error::ErrorKind, other: Self) -> Self {
-        other
-    }
-}
-
-impl nom::error::ContextError<Span<'_>> for ParseError {
-    fn add_context(input: Span<'_>, ctx: &'static str, mut other: Self) -> Self {
-        other.notes.push(ParseErrorNote {
-            location: Location::from(input),
-            note: ctx,
-        });
-
-        other
-    }
 }

@@ -503,6 +503,15 @@ version = "0.0.0"
 name = "shebling-parser"
 version = "0.0.0"
 dependencies = [
+ "miette",
+ "nom",
+ "thiserror",
+]
+
+[[package]]
+name = "shebling-parser-old"
+version = "0.0.0"
+dependencies = [
  "derive_more",
  "miette",
  "nom",

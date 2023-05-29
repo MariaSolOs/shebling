@@ -26,7 +26,7 @@ fn main() {
     let file_path = args.path.to_string_lossy();
 
     match fs::read_to_string(&args.path) {
-        Ok(source) => shebling_parser::parse(&file_path, &source),
+        Ok(source) => shebling_parser::parse(&source),
         Err(err) => {
             let mut cmd = Args::command();
             cmd.error(
