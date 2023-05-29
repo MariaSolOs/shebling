@@ -51,7 +51,7 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    match word(source_to_span(source_code)).finish() {
+    match term(source_to_span(source_code)).finish() {
         Ok((span, res)) => {
             println!("OK SPAN {:#?}", span);
             println!("OK RES {:#?}", res);

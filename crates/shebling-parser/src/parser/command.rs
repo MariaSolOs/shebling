@@ -1699,7 +1699,7 @@ mod tests {
         // Missing the closing bracket.
         assert_parse!(cond("[ ") => Err(
             (1, 3),
-            Notes: [((1, 3), "expected a non-empty word"), ((1, 3), "invalid condition argument")]
+            Notes: [((1, 3), "invalid or missing word"), ((1, 3), "invalid condition argument")]
         ));
 
         // Missing space after the opening bracket.
@@ -2121,7 +2121,7 @@ mod tests {
         // let expressions need arguments.
         assert_parse!(simple_cmd("let") => Err(
             (1, 4),
-            Notes: [((1, 4), "expected a non-empty word"), ((1, 4), "expected an expression")]
+            Notes: [((1, 4), "invalid or missing word"), ((1, 4), "expected an expression")]
         ));
     }
 

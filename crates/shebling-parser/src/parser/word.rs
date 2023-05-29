@@ -271,7 +271,7 @@ fn subscript(span: Span) -> ParseResult<String> {
 
 pub(super) fn word(span: Span) -> ParseResult<Word> {
     let (span, (word, range)) = ranged(map(
-        context("expected a non-empty word!", many1(word_sgmt)),
+        context("invalid or missing word!", many1(word_sgmt)),
         Word::new,
     ))(span)?;
 
@@ -534,7 +534,7 @@ mod tests {
         );
 
         // Can't be empty.
-        assert_parse!(word("") => Err((1, 1), Notes: [((1, 1), "expected a non-empty word")]));
+        assert_parse!(word("") => Err((1, 1), Notes: [((1, 1), "invalid or missing word")]));
     }
 
     #[test]
