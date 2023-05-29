@@ -180,16 +180,22 @@ pub(super) fn line_continuation(span: Span) -> ParseResult<()> {
 }
 
 pub(super) fn single_quoted(span: Span) -> ParseResult<String> {
+    fn quote(span: Span) -> ParseResult<()> {
+        let (span, (quote, range)) = ranged(alt((char('\''), one_of(SINGLE_UNIQUOTES))))(span)?;
+        if quote != '\'' {
+            span.extra.diag(
+                ParseDiagnostic::builder(ParseDiagnosticKind::Unichar)
+                    .label("unicode single quote", range),
+            );
+        }
+
+        Ok((span, ()))
+    }
+
     // Parse the opening quote and the string.
-    let (span, (start, string)) = pair(
-        tag("'"),
-        map(
-            many0(alt((
-                into(single_uniquote),
-                recognize_string(is_not(&*format!("'{}", SINGLE_UNIQUOTES))),
-            ))),
-            |sgmt| sgmt.concat(),
-        ),
+    let (span, string) = preceded(
+        quote,
+        recognize_string(take_till(|c| c == '\'' || SINGLE_UNIQUOTES.contains(c))),
     )(span)?;
 
     // Check that the ending quote isn't escaped.
@@ -203,10 +209,9 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<String> {
     }
 
     // Verify the closing quote.
-    let (span, (end, range)) =
-        ranged(cut(context("expected ending single quote!", tag("'"))))(span)?;
+    let (span, (_, range)) = ranged(cut(context("expected ending single quote!", quote)))(span)?;
 
-    // Is the string unclosed?
+    // Apostrophe check.
     let (span, next_char) = opt(peek(satisfy(|c| is_sus_char_after_quote(c) || c == '\'')))(span)?;
     if let Some(next_char) = next_char {
         if next_char.is_ascii_alphabetic() && last_char.is_ascii_alphabetic() {
@@ -215,21 +220,10 @@ pub(super) fn single_quoted(span: Span) -> ParseResult<String> {
                     .label("this apostrophe terminated the string!", range)
                     .help("Try escaping the apostrophe, 'it'\\''s done like this!'"),
             );
-        } else if !string.starts_with('\n') && string.contains('\n') {
-            report_unclosed_string(&span, start, end);
         }
     }
 
     Ok((span, string))
-}
-
-pub(super) fn single_uniquote(span: Span) -> ParseResult<char> {
-    let (span, (quote, range)) = ranged(one_of(SINGLE_UNIQUOTES))(span)?;
-    span.extra.diag(
-        ParseDiagnostic::builder(ParseDiagnosticKind::Unichar).label("unicode single quote", range),
-    );
-
-    Ok((span, quote))
 }
 
 // region: Utilities.
@@ -385,11 +379,14 @@ mod tests {
         // An empty string is also fine.
         assert_parse!(single_quoted("''"), "");
 
-        // Warn when finding a uniquote.
+        // Warn when using uniquotes.
         assert_parse!(
-            single_quoted("'let’s'"),
-            "let’s",
-            [((1, 5), (1, 6), ParseDiagnosticKind::Unichar)]
+            single_quoted("‘foo’"),
+            "foo",
+            [
+                ((1, 1), (1, 2), ParseDiagnosticKind::Unichar),
+                ((1, 5), (1, 6), ParseDiagnosticKind::Unichar)
+            ]
         );
 
         // The ending quote looks like a failed escape.
@@ -406,28 +403,8 @@ mod tests {
             [((1, 5), (1, 6), ParseDiagnosticKind::UnclosedString)]
         );
 
-        // Multi-line string, but the next character looks sus.
-        assert_parse!(
-            single_quoted("'foo\n'bar") => "bar",
-            "foo\n",
-            [((1, 1), ParseDiagnosticKind::UnclosedString)]
-        );
-
         // Make sure both quotes are present.
         assert_parse!(single_quoted("foo'") => Err(1, 1));
         assert_parse!(single_quoted("'foo") => Err((1, 5), Notes: [((1, 5), "expected ending single quote")]));
-    }
-
-    #[test]
-    fn test_single_uniquote() {
-        // A legit uniquote.
-        assert_parse!(
-            single_uniquote("\u{2018}"),
-            '\u{2018}',
-            [((1, 1), (1, 2), ParseDiagnosticKind::Unichar)]
-        );
-
-        // Not a uniquote.
-        assert_parse!(single_uniquote("'") => Err(1, 1));
     }
 }

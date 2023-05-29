@@ -320,9 +320,6 @@ fn word_sgmt_before_pattern<'a>(
             map(brace_expansion, WordSgmt::BraceExpansion),
             map(backquoted, WordSgmt::BackQuoted),
             map(proc_sub, WordSgmt::ProcSub),
-            map(alt((single_uniquote, double_uniquote)), |quote| {
-                WordSgmt::Lit(quote.into())
-            }),
             lit_word_sgmt(pattern),
             // Literal curly braces:
             map(alt((recognize_string(tag("{}")), lit_curly)), WordSgmt::Lit),

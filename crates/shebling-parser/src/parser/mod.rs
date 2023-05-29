@@ -51,7 +51,7 @@ pub(crate) fn test(file_path: impl AsRef<str>, source_code: &str) {
     use miette::Report;
     use std::sync::Arc;
 
-    match arith_seq(source_to_span(source_code)).finish() {
+    match single_quoted(source_to_span(source_code)).finish() {
         Ok((span, res)) => {
             println!("OK SPAN {:#?}", span);
             println!("OK RES {:#?}", res);
