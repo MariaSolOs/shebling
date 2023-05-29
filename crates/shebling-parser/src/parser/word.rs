@@ -141,6 +141,9 @@ pub(super) fn identifier(span: Span) -> ParseResult<String> {
 }
 
 fn lit_string(end_pattern: &'static str) -> impl Fn(Span) -> ParseResult<String> {
+    const DOUBLE_UNIQUOTES: &str = "\u{201C}\u{201D}\u{2033}\u{2036}";
+    const SINGLE_UNIQUOTES: &str = "\u{2018}\u{2019}";
+
     fn escaped_lit(span: Span) -> ParseResult<String> {
         let (mut span, (start, c)) = preceded(
             backslash,
@@ -198,13 +201,27 @@ fn lit_string(end_pattern: &'static str) -> impl Fn(Span) -> ParseResult<String>
         Ok((span, c.into()))
     }
 
+    fn uniquote(span: Span) -> ParseResult<String> {
+        let (span, ((quote, quote_kind), range)) = ranged(consumed(alt((
+            value("single", one_of(SINGLE_UNIQUOTES)),
+            value("double", one_of(DOUBLE_UNIQUOTES)),
+        ))))(span)?;
+
+        span.extra.diag(
+            ParseDiagnostic::builder(ParseDiagnosticKind::Unichar)
+                .label(format!("unicode {} quote", quote_kind), range),
+        );
+
+        Ok((span, String::from(*quote.fragment())))
+    }
+
     move |span| {
         map(
             many1(alt((
                 // Special case for line continuation + commented sequences.
                 // By calling trivia() after the peek, we make sure that the lint for '# foo \' is reported.
                 value(String::new(), terminated(peek(line_continuation), trivia)),
-                alt((escaped_lit, failed_escaped)),
+                alt((escaped_lit, failed_escaped, uniquote)),
                 // Some other sequence of non-special, unescaped characters.
                 recognize_string(is_not(&*format!(
                     "[{{}}|&;<>() '\t\n\r\u{A0}{}{}{}{}{}",
@@ -533,6 +550,24 @@ mod tests {
             word_sgmt("{foo;}") => "foo;}",
             WordSgmt::Lit("{".into()),
             [((1, 1), (1, 2), ParseDiagnosticKind::SusToken)]
+        );
+
+        // Using uniquotes.
+        assert_parse!(
+            word_sgmt("‘foo’"),
+            WordSgmt::Lit("‘foo’".into()),
+            [
+                ((1, 1), (1, 2), ParseDiagnosticKind::Unichar),
+                ((1, 5), (1, 6), ParseDiagnosticKind::Unichar)
+            ]
+        );
+        assert_parse!(
+            word_sgmt("“foo”"),
+            WordSgmt::Lit("“foo”".into()),
+            [
+                ((1, 1), (1, 2), ParseDiagnosticKind::Unichar),
+                ((1, 5), (1, 6), ParseDiagnosticKind::Unichar)
+            ]
         );
     }
 }

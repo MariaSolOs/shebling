@@ -49,7 +49,7 @@ impl ParseDiagnostic {
 
         ParseDiagnosticBuilder {
             kind,
-            labels: Vec::new(),
+            labels: vec![],
             help,
         }
     }
@@ -155,6 +155,9 @@ pub(crate) enum ParseDiagnosticKind {
     UnclosedString,
 
     #[error("unicode character!")]
-    #[diagnostic(code(shebling::unichar), help("Delete and retype it."))]
+    #[diagnostic(
+        code(shebling::unichar),
+        help("Delete and retype it, or quote it if intended.")
+    )]
     Unichar,
 }

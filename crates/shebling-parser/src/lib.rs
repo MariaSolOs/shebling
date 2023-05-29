@@ -22,7 +22,7 @@ struct ParseContext {
 impl ParseContext {
     fn new() -> Self {
         Self {
-            diags: RefCell::new(Vec::new()),
+            diags: RefCell::new(vec![]),
         }
     }
 
@@ -42,7 +42,7 @@ impl ParseContext {
 
 fn source_to_span(source_code: &str) -> Span {
     let context = ParseContext {
-        diags: RefCell::new(Vec::new()),
+        diags: RefCell::new(vec![]),
     };
 
     nom_locate::LocatedSpan::new_extra(source_code, context)

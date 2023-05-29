@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Debug, Error, miette::Diagnostic)]
-#[error("Parser bailed!")]
+#[error("parser bailed!")]
 #[diagnostic(code(shebling::parser::fatal), severity("error"))]
 pub(crate) struct ParseError {
     #[label("stopped here")]
@@ -61,7 +61,7 @@ impl nom::error::ParseError<Span<'_>> for ParseError {
     fn from_error_kind(input: Span<'_>, _kind: nom::error::ErrorKind) -> Self {
         Self {
             location: Location::from(&input),
-            notes: Vec::new(),
+            notes: vec![],
             diags: input.extra.take_diags(),
         }
     }
