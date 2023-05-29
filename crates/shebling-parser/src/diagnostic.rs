@@ -110,51 +110,51 @@ impl ParseDiagnosticBuilder {
 // TODO: Combine/separate diagnostics.
 #[derive(Clone, Debug, Error, miette::Diagnostic)]
 pub(crate) enum ParseDiagnosticKind {
-    #[error("Ambiguous command!")]
-    #[diagnostic(code(shebling::parser::ambiguous))]
+    #[error("ambiguous command!")]
+    #[diagnostic(code(shebling::ambiguous))]
     Ambiguous,
 
-    #[error("Bad escaping!")]
-    #[diagnostic(code(shebling::parser::bad_escape))]
+    #[error("bad escaping!")]
+    #[diagnostic(code(shebling::bad_escape))]
     BadEscape,
 
-    #[error("Bad operator!")]
-    #[diagnostic(code(shebling::parser::bad_operator))]
+    #[error("bad operator!")]
+    #[diagnostic(code(shebling::bad_operator))]
     BadOperator,
 
-    #[error("Bad spacing!")]
-    #[diagnostic(code(shebling::parser::bad_space))]
+    #[error("bad spacing!")]
+    #[diagnostic(code(shebling::bad_space))]
     BadSpace,
 
-    #[error("You should escape this character.")]
-    #[diagnostic(code(shebling::parser::missing_escape))]
+    #[error("you should escape this character.")]
+    #[diagnostic(code(shebling::missing_escape))]
     MissingEscape,
 
-    #[error("You need a space here.")]
-    #[diagnostic(code(shebling::parser::missing_space))]
+    #[error("you need a space here.")]
+    #[diagnostic(code(shebling::missing_space))]
     MissingSpace,
 
-    #[error("Incorrect shell syntax!")]
-    #[diagnostic(code(shebling::parser::not_shell_code))]
+    #[error("incorrect shell syntax!")]
+    #[diagnostic(code(shebling::not_shell_code))]
     NotShellCode,
 
-    #[error("This code looks a bit suspicious.")]
-    #[diagnostic(code(shebling::parser::sus_token))]
+    #[error("this code looks a bit suspicious.")]
+    #[diagnostic(code(shebling::sus_token))]
     SusToken,
 
-    #[error("This assignment's value looks kinda sus.")]
-    #[diagnostic(code(shebling::parser::sus_value))]
+    #[error("this assignment's value looks kinda sus.")]
+    #[diagnostic(code(shebling::sus_value))]
     SusValue,
 
-    #[error("You're missing some curlies here.")]
-    #[diagnostic(code(shebling::parser::unbraced))]
+    #[error("you're missing some curlies here.")]
+    #[diagnostic(code(shebling::unbraced))]
     Unbraced,
 
-    #[error("Unclosed string!")]
-    #[diagnostic(code(shebling::parser::unclosed_string))]
+    #[error("unclosed string!")]
+    #[diagnostic(code(shebling::unclosed_string))]
     UnclosedString,
 
-    #[error("Unicode character!")]
-    #[diagnostic(code(shebling::parser::unichar), help("Delete and retype it."))]
+    #[error("unicode character!")]
+    #[diagnostic(code(shebling::unichar), help("Delete and retype it."))]
     Unichar,
 }
