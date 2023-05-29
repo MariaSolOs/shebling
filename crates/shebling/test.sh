@@ -1,1 +1,3 @@
-'foo“foo'
+#!/bin/bash
+
+echo ‘Hola $foo’

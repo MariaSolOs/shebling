@@ -5,3 +5,6 @@ members = [
     "crates/shebling-linter",
     "crates/shebling-parser",
 ]
+
+[workspace.dependencies]
+miette = { version = "5.9.0", features = [ "fancy" ]}

@@ -491,6 +491,9 @@ dependencies = [
 [[package]]
 name = "shebling-ast"
 version = "0.0.0"
+dependencies = [
+ "miette",
+]
 
 [[package]]
 name = "shebling-linter"
@@ -506,6 +509,7 @@ dependencies = [
  "nom_locate",
  "once_cell",
  "pretty_assertions",
+ "shebling-ast",
  "thiserror",
  "wec",
 ]

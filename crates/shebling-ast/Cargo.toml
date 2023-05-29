@@ -7,3 +7,6 @@ description = "Placeholder for a shebling crate"
 readme = "README.md"
 repository = "https://github.com/MariaSolOs/shebling"
 license = "Apache-2.0"
+
+[dependencies]
+miette = { workspace = true }
