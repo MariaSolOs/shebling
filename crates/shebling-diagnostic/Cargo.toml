@@ -1,11 +1,9 @@
 [package]
-name = "shebling-parser"
+name = "shebling-diagnostic"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
 miette = { workspace = true }
-nom = "7.1.3"
 shebling-ast = { version = "0.0.0", path = "../shebling-ast" }
-shebling-diagnostic = { version = "0.0.0", path = "../shebling-diagnostic" }
 thiserror = { workspace = true }

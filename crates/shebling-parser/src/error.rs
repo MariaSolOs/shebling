@@ -1,6 +1,6 @@
 use crate::span::ParseSpan;
 
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
 #[error("parser bailed!")]
 #[diagnostic(code(shebling::parser::fatal), severity("error"))]
 pub(crate) struct ParseError {
@@ -13,7 +13,7 @@ pub(crate) struct ParseError {
 impl nom::error::ParseError<ParseSpan<'_>> for ParseError {
     fn from_error_kind(input: ParseSpan, _kind: nom::error::ErrorKind) -> Self {
         Self {
-            location: 0,
+            location: input.offset(),
             notes: vec![],
         }
     }
@@ -23,7 +23,18 @@ impl nom::error::ParseError<ParseSpan<'_>> for ParseError {
     }
 }
 
-#[derive(Clone, Debug, thiserror::Error, miette::Diagnostic)]
+impl nom::error::ContextError<ParseSpan<'_>> for ParseError {
+    fn add_context(input: ParseSpan<'_>, ctx: &'static str, mut other: Self) -> Self {
+        other.notes.push(ParseErrorNote {
+            location: input.offset(),
+            note: ctx,
+        });
+
+        other
+    }
+}
+
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
 #[error("{note}")]
 #[diagnostic(severity("error"))]
 pub(crate) struct ParseErrorNote {

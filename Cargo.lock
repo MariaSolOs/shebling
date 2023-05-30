@@ -496,6 +496,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shebling-diagnostic"
+version = "0.0.0"
+dependencies = [
+ "miette",
+ "shebling-ast",
+ "thiserror",
+]
+
+[[package]]
 name = "shebling-linter"
 version = "0.0.0"
 
@@ -505,6 +514,8 @@ version = "0.0.0"
 dependencies = [
  "miette",
  "nom",
+ "shebling-ast",
+ "shebling-diagnostic",
  "thiserror",
 ]
 

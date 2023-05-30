@@ -2,6 +2,7 @@
 members = [
     "crates/shebling",
     "crates/shebling-ast",
+    "crates/shebling-diagnostic",
     "crates/shebling-linter",
     "crates/shebling-parser",
     "crates/shebling-parser-old",
