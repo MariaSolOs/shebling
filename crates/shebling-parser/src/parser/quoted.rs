@@ -21,7 +21,7 @@ pub(crate) fn single_quoted(span: ParseSpan) -> ParseResult<String> {
     let (span, alphabetic_follows) = peeked(satisfy(|c| c.is_ascii_alphabetic()))(span)?;
     if alphabetic_follows && last_char.is_ascii_alphabetic() {
         span.diag(
-            Diagnostic::builder(DiagnosticKind::SusChar)
+            Diagnostic::builder(DiagnosticKind::BadQuote)
                 .label("this apostrophe terminates the string!", quote)
                 .help("Try escaping the apostrophe, 'it'\\''s done like this!'"),
         );

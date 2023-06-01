@@ -4,7 +4,7 @@ pub enum DiagnosticKind {
     #[diagnostic(code(shebling::bad_escape))]
     BadEscape,
 
-    #[error("this character looks a bit suspicious")]
-    #[diagnostic(code(shebling::sus_char))]
-    SusChar,
+    #[error("bad quote!")]
+    #[diagnostic(code(shebling::bad_quote))]
+    BadQuote,
 }
