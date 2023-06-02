@@ -48,7 +48,6 @@ pub(crate) fn parse(source_code: &str, file_path: &str) {
     // HACK: When reporting errors, add a newline to the end of the source
     // so that miette can highlight the last character.
 
-    // use crate::source_to_span;
     use miette::Report;
     use std::sync::Arc;
 

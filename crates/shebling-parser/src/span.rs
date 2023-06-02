@@ -24,6 +24,10 @@ impl ParseDiags {
     pub(crate) fn new() -> Self {
         Self(RefCell::new(vec![]))
     }
+
+    fn push(&self, builder: DiagnosticBuilder) {
+        self.0.borrow_mut().push(builder.build());
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -51,7 +55,7 @@ impl<'a> ParseSpan<'a> {
     }
 
     pub(crate) fn diag(&self, builder: DiagnosticBuilder) {
-        self.diags.0.borrow_mut().push(builder.build());
+        self.diags.push(builder);
     }
 }
 
