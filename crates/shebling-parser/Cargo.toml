@@ -11,4 +11,5 @@ shebling-diagnostic = { version = "0.0.0", path = "../shebling-diagnostic" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-snap = "1.1.0"
+insta = "1.29.0"
+pretty_assertions = "1.3.0"

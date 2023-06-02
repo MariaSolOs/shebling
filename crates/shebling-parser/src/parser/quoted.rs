@@ -29,3 +29,72 @@ pub(crate) fn single_quoted(span: ParseSpan) -> ParseResult<String> {
 
     Ok((span, string))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::tests;
+
+    use insta::assert_debug_snapshot;
+
+    #[test]
+    fn test_single_quoted() {
+        // A valid single quoted string.
+        assert_debug_snapshot!(tests::parse_ok(single_quoted, "'foo bar'", ""), @r###"
+        (
+            [],
+            "foo bar",
+        )
+        "###);
+
+        // Suspicious closing quotes.
+        assert_debug_snapshot!(tests::parse_ok(single_quoted, "'let's", "s"), @r###"
+        (
+            [
+                (
+                    "shebling::bad_quote",
+                    SourceSpan {
+                        offset: SourceOffset(
+                            4,
+                        ),
+                        length: 1,
+                    },
+                ),
+            ],
+            "let",
+        )
+        "###);
+        assert_debug_snapshot!(tests::parse_ok(single_quoted, "'let\\'s", "s"), @r###"
+        (
+            [
+                (
+                    "shebling::bad_escape",
+                    SourceSpan {
+                        offset: SourceOffset(
+                            5,
+                        ),
+                        length: 0,
+                    },
+                ),
+            ],
+            "let\\",
+        )
+        "###);
+
+        // Unclosed string.
+        assert_debug_snapshot!(tests::parse_fail(single_quoted, "'foo"), @r###"
+        (
+            ParseError {
+                location: 4,
+                notes: [
+                    ParseErrorNote {
+                        location: 4,
+                        note: "expected ending single quote!",
+                    },
+                ],
+            },
+            [],
+        )
+        "###);
+    }
+}

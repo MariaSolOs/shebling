@@ -25,6 +25,16 @@ impl Diagnostic {
             help,
         }
     }
+
+    /// The [miette::SourceSpan] of the first label, which is used as the diagnostic's
+    /// main span.
+    pub fn span(&self) -> &miette::SourceSpan {
+        &self
+            .labels
+            .first()
+            .expect("Diagnostics should have at least one label.")
+            .inner()
+    }
 }
 
 // This implementation basically wraps the methods in DiagnosticKind,
