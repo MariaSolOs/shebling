@@ -11,6 +11,7 @@ impl Span {
 }
 
 /// An AST node together with its [Span].
+#[derive(Debug)]
 pub struct Spanned<T>(T, Span);
 
 impl<T> Spanned<T> {

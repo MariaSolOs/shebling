@@ -2,6 +2,7 @@
 mod tests;
 
 mod quoted;
+mod word;
 
 use crate::{
     error::ParseError,
@@ -10,6 +11,7 @@ use crate::{
 use quoted::single_quoted;
 
 use nom::{
+    branch::alt,
     bytes::complete::take_till,
     character::complete::{char, satisfy},
     combinator::{cut, map, opt, peek, recognize},
@@ -17,7 +19,7 @@ use nom::{
     sequence::{preceded, tuple},
     Finish,
 };
-use shebling_ast::{Span, Spanned};
+use shebling_ast::*;
 use shebling_diagnostic::{Diagnostic, DiagnosticKind};
 
 pub(crate) type ParseResult<'a, R> = nom::IResult<ParseSpan<'a>, R, ParseError>;
