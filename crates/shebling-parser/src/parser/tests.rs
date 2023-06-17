@@ -12,7 +12,7 @@ where
     P: Fn(ParseSpan) -> ParseResult<R>,
     R: fmt::Debug,
 {
-    // Parse and ensure it succeeds.
+    // Parse and ensure it fails.
     let diags = ParseDiags::new();
     let err = parser(ParseSpan::new(source, &diags))
         .finish()
