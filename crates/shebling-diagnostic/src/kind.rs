@@ -1,3 +1,4 @@
+/// Diagnostic kinds reported by `shebling`.
 #[derive(Debug, miette::Diagnostic, thiserror::Error)]
 pub enum DiagnosticKind {
     #[error("bad escaping!")]

@@ -1,7 +1,8 @@
-use crate::DiagnosticKind;
-
 use std::fmt;
 
+use crate::DiagnosticKind;
+
+/// A `shebling` diagnostic.
 #[derive(Debug, thiserror::Error)]
 #[error("{kind}")]
 pub struct Diagnostic {

@@ -4,12 +4,6 @@ mod tests;
 mod quoted;
 mod word;
 
-use crate::{
-    error::ParseError,
-    span::{offset, ParseDiags, ParseSpan},
-};
-use quoted::single_quoted;
-
 use nom::{
     branch::alt,
     bytes::complete::take_till,
@@ -22,6 +16,13 @@ use nom::{
 use shebling_ast::*;
 use shebling_diagnostic::{Diagnostic, DiagnosticKind};
 
+use crate::{
+    error::ParseError,
+    span::{offset, ParseDiags, ParseSpan},
+};
+use quoted::single_quoted;
+
+/// Result of a `shebling` parser.
 pub(crate) type ParseResult<'a, R> = nom::IResult<ParseSpan<'a>, R, ParseError>;
 
 // region: Utility parsers.

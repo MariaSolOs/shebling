@@ -1,5 +1,5 @@
+# TODO: Make this "publishable"
 [package]
-# TODO: Make these "publishable"
 name = "shebling"
 version = "0.0.0"
 authors = ["Maria José Solano <majosolano99@gmail.com>"]

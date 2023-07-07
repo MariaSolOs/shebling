@@ -1,5 +1,3 @@
-use crate::parser::ParseResult;
-
 use nom::{bytes::complete::take, combinator::map, Offset, Slice};
 use shebling_diagnostic::{Diagnostic, DiagnosticBuilder};
 use std::{
@@ -7,6 +5,10 @@ use std::{
     ops::{RangeFrom, RangeTo},
     str::{CharIndices, Chars},
 };
+
+use crate::parser::ParseResult;
+
+// TODO: Document.
 
 #[derive(Debug)]
 pub(crate) struct ParseDiags(RefCell<Vec<Diagnostic>>);

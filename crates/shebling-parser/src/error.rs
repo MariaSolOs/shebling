@@ -1,5 +1,6 @@
 use crate::span::ParseSpan;
 
+/// A `shebling` parse error.
 #[derive(Debug, miette::Diagnostic, thiserror::Error)]
 #[error("parser bailed!")]
 #[diagnostic(code(shebling::parser::fatal), severity("error"))]
@@ -34,6 +35,7 @@ impl nom::error::ContextError<ParseSpan<'_>> for ParseError {
     }
 }
 
+/// Extra context information about a `shebling` parse error.
 #[derive(Debug, miette::Diagnostic, thiserror::Error)]
 #[error("{note}")]
 #[diagnostic(severity("error"))]

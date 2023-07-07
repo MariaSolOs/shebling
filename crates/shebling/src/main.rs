@@ -21,7 +21,7 @@ struct Args {
     path: PathBuf,
 }
 
-//  TODO: Move the miette reporting to this crate.
+//  TODO: Use miette here.
 
 fn main() {
     let args = Args::parse();
