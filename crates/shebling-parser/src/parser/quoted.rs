@@ -1,5 +1,26 @@
 use super::*;
 
+fn backslash(span: ParseSpan) -> ParseResult<char> {
+    char('\\')(span)
+}
+
+fn escaped<'a>(can_escape: &'static str) -> impl FnMut(ParseSpan<'a>) -> ParseResult<String> {
+    alt((
+        map(line_continuation, |_| String::new()),
+        map(pair(backslash, anychar), move |(bs, c)| {
+            if can_escape.contains(c) {
+                c.into()
+            } else {
+                format!("{}{}", bs, c)
+            }
+        }),
+    ))
+}
+
+fn line_continuation(span: ParseSpan) -> ParseResult<()> {
+    swallow(pair(backslash, newline))(span)
+}
+
 pub(crate) fn single_quoted(span: ParseSpan) -> ParseResult<String> {
     // Parse the opening quote and the string.
     let (span, string) = preceded(char('\''), recognize_string(take_till(|c| c == '\'')))(span)?;

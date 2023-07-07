@@ -7,10 +7,11 @@ mod word;
 use nom::{
     branch::alt,
     bytes::complete::take_till,
-    character::complete::{char, satisfy},
-    combinator::{cut, map, opt, peek, recognize},
+    character::complete::{anychar, char, newline, satisfy},
+    combinator::{cut, map, opt, peek, recognize, value},
     error::context,
-    sequence::{preceded, tuple},
+    multi::many0,
+    sequence::{delimited, pair, preceded, tuple},
     Finish,
 };
 use shebling_ast::*;
@@ -47,6 +48,13 @@ where
     map(tuple((offset, parser, offset)), |(start, res, end)| {
         Spanned::new(res, Span::new(start, end))
     })
+}
+
+fn swallow<'a, P, R>(parser: P) -> impl FnMut(ParseSpan<'a>) -> ParseResult<()>
+where
+    P: FnMut(ParseSpan<'a>) -> ParseResult<R>,
+{
+    value((), parser)
 }
 // endregion
 
