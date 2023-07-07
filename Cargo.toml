@@ -7,7 +7,8 @@ members = [
     "crates/shebling-parser",
     "crates/shebling-parser-old",
 ]
+resolver = "2"
 
 [workspace.dependencies]
 miette = { version = "5.9.0", features = [ "fancy" ]}
-thiserror = { version = "1.0.40" }
+thiserror = { version = "1.0.43" }
