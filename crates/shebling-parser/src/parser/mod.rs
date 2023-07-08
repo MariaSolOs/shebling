@@ -11,7 +11,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till},
     character::complete::{alpha1, alphanumeric1, anychar, char, newline, one_of, satisfy},
-    combinator::{consumed, cut, map, not, opt, peek, recognize, value},
+    combinator::{consumed, cut, into, map, not, opt, peek, recognize, value},
     error::context,
     multi::{many0, many1, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},

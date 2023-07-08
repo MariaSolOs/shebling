@@ -11,3 +11,4 @@ license = "Apache-2.0"
 
 [dependencies]
 miette = { workspace = true }
+derive_more = { version = "0.99.17", default-features = false, features = ["from"] }

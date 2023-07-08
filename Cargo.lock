@@ -514,6 +514,7 @@ dependencies = [
 name = "shebling-ast"
 version = "0.0.0"
 dependencies = [
+ "derive_more",
  "miette",
 ]
 

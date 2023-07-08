@@ -87,9 +87,9 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
                 // the assignments).
                 tail.reverse();
                 if let Some((op, term)) = tail.into_iter().reduce(|(op, right), (next_op, left)| {
-                    (next_op, ArithTerm::BinExpr(BinExpr::new(left, right, op)))
+                    (next_op, BinExpr::new(left, right, op).into())
                 }) {
-                    ArithTerm::BinExpr(BinExpr::new(head, term, op))
+                    BinExpr::new(head, term, op).into()
                 } else {
                     head
                 }
@@ -118,9 +118,8 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
         map(
             pair(term, many0(separated_pair(spanned(op), arith_space, term))),
             |(head, tail)| {
-                tail.into_iter().fold(head, |acc, (op, term)| {
-                    ArithTerm::BinExpr(BinExpr::new(acc, term, op))
-                })
+                tail.into_iter()
+                    .fold(head, |acc, (op, term)| BinExpr::new(acc, term, op).into())
             },
         )
     }
@@ -148,7 +147,7 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
                         arith_space,
                     ),
                 ),
-                |(expr, op)| ArithTerm::UnExpr(UnExpr::new(expr, op)),
+                |(expr, op)| UnExpr::new(expr, op).into(),
             ),
             // Doesn't have a prefix or postfix increment.
             terminated(term, arith_space),
@@ -159,7 +158,7 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
                     arith_space,
                     term,
                 ),
-                |(op, expr)| ArithTerm::UnExpr(UnExpr::new(expr, op)),
+                |(op, expr)| UnExpr::new(expr, op).into(),
             ),
         ))(span)
     }
@@ -178,7 +177,7 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
                     arith_space,
                     maybe_incremented_term,
                 ),
-                |(op, expr)| ArithTerm::UnExpr(UnExpr::new(expr, op)),
+                |(op, expr)| UnExpr::new(expr, op).into(),
             ),
             maybe_incremented_term,
         ))(span)
@@ -195,7 +194,7 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
                 arith_space,
                 maybe_negated,
             ),
-            |(op, expr)| ArithTerm::UnExpr(UnExpr::new(expr, op)),
+            |(op, expr)| UnExpr::new(expr, op).into(),
         )(span)
     }
 
@@ -218,14 +217,13 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
         terminated(
             alt((
                 // A group.
-                delimited(char('('), map(seq, ArithTerm::Group), char(')')),
-                map(
-                    many1(alt((
-                        map(spanned(single_quoted), WordSgmt::SingleQuoted),
-                        map(double_quoted, WordSgmt::DoubleQuoted),
-                    ))),
-                    ArithTerm::Expansion,
-                ),
+                delimited(char('('), into(seq), char(')')),
+                // TODO: Variables.
+                into(many1(alt((
+                    map(spanned(single_quoted), WordSgmt::SingleQuoted),
+                    into(double_quoted),
+                    // TODO: Parse other segments.
+                )))),
             )),
             arith_space,
         )(span)
@@ -240,7 +238,7 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
                     preceded(pair(char(':'), arith_space), trinary),
                 )),
                 |(cond, then_branch, else_branch)| {
-                    ArithTerm::TriExpr(ArithTriExpr::new(cond, then_branch, else_branch))
+                    ArithTriExpr::new(cond, then_branch, else_branch).into()
                 },
             ),
             or,

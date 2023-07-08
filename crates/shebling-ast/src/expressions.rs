@@ -1,3 +1,5 @@
+use derive_more::From;
+
 use super::*;
 
 /// Trait for types that represent single tokens, such as keywords
@@ -150,11 +152,11 @@ pub struct BinExpr<O, L, R = L> {
 
 impl<O, L, R> BinExpr<O, L, R> {
     /// Creates a new binary expression.
-    pub fn new(left: L, right: R, op: O) -> Self {
+    pub fn new(left: impl Into<L>, right: impl Into<R>, op: impl Into<O>) -> Self {
         BinExpr {
-            left: Box::new(left),
-            right: Box::new(right),
-            op,
+            left: Box::new(left.into()),
+            right: Box::new(right.into()),
+            op: op.into(),
         }
     }
 }
@@ -191,16 +193,16 @@ pub struct UnExpr<O, E> {
 
 impl<O, E> UnExpr<O, E> {
     /// Creates a new unary expression.
-    pub fn new(expr: E, op: O) -> Self {
+    pub fn new(expr: impl Into<E>, op: impl Into<O>) -> Self {
         UnExpr {
-            expr: Box::new(expr),
-            op,
+            expr: Box::new(expr.into()),
+            op: op.into(),
         }
     }
 }
 
 /// Arithmetic expressions.
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub enum ArithTerm {
     /// Binary expression (e.g. `$x + 1`).
     BinExpr(BinExpr<Spanned<BinOp>, ArithTerm>),
@@ -233,11 +235,15 @@ pub struct ArithTriExpr {
 
 impl ArithTriExpr {
     /// Creates a new arithmetic ternary expression.
-    pub fn new(cond: ArithTerm, then_branch: ArithTerm, else_branch: ArithTerm) -> Self {
+    pub fn new(
+        cond: impl Into<ArithTerm>,
+        then_branch: impl Into<ArithTerm>,
+        else_branch: impl Into<ArithTerm>,
+    ) -> Self {
         Self {
-            cond: Box::new(cond),
-            then_branch: Box::new(then_branch),
-            else_branch: Box::new(else_branch),
+            cond: Box::new(cond.into()),
+            then_branch: Box::new(then_branch.into()),
+            else_branch: Box::new(else_branch.into()),
         }
     }
 }

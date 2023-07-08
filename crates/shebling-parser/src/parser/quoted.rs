@@ -25,7 +25,7 @@ pub(super) fn double_quoted(span: ParseSpan) -> ParseResult<DoubleQuoted> {
         map(
             many0(alt((
                 // TODO: dollar_exp
-                map(spanned(lit), DoubleQuotedSgmt::Lit),
+                into(spanned(lit)),
                 // TODO: escaping_backquoted
             ))),
             DoubleQuoted::new,
