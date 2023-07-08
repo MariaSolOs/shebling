@@ -218,7 +218,9 @@ pub enum ArithTerm {
 
     /// Unary expression (e.g. `++x`).
     UnExpr(UnExpr<Spanned<UnOp>, ArithTerm>),
-    // TODO: Var(SubscriptedVar),
+
+    /// A (maybe indexed) variable.
+    Var(SubscriptedVar),
 }
 
 /// Comma-delimited sequence of arithmetic terms.

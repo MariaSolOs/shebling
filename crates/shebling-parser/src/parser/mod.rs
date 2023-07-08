@@ -27,6 +27,7 @@ use crate::{
 use quoted::{double_quoted, line_continuation, single_quoted};
 use token::token;
 use trivia::whitespace;
+use word::identifier;
 
 /// Result of a `shebling` parser.
 pub(crate) type ParseResult<'a, R> = nom::IResult<ParseSpan<'a>, R, ParseError>;

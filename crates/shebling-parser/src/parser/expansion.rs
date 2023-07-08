@@ -218,7 +218,19 @@ fn arith_seq(span: ParseSpan) -> ParseResult<ArithSeq> {
             alt((
                 // A group.
                 delimited(char('('), into(seq), char(')')),
-                // TODO: Variables.
+                // A variable, which could be an array with more math stuff as an index.
+                map(
+                    pair(
+                        identifier,
+                        many0(delimited(
+                            char('['),
+                            // TODO: Parse these later based on the array being associative or not.
+                            recognize_string(arith_seq),
+                            char(']'),
+                        )),
+                    ),
+                    |(ident, indices)| SubscriptedVar::new(ident, indices).into(),
+                ),
                 into(many1(alt((
                     map(spanned(single_quoted), WordSgmt::SingleQuoted),
                     into(double_quoted),
