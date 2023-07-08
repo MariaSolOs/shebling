@@ -10,7 +10,7 @@ mod word;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till},
-    character::complete::{anychar, char, newline, one_of, satisfy},
+    character::complete::{alpha1, alphanumeric1, anychar, char, newline, one_of, satisfy},
     combinator::{consumed, cut, map, not, opt, peek, recognize, value},
     error::context,
     multi::{many0, many1, separated_list0},
@@ -41,7 +41,7 @@ where
 
 fn recognize_string<'a, P, R>(parser: P) -> impl FnMut(ParseSpan<'a>) -> ParseResult<String>
 where
-    P: Fn(ParseSpan<'a>) -> ParseResult<R>,
+    P: FnMut(ParseSpan<'a>) -> ParseResult<R>,
 {
     map(recognize(parser), |span| span.fragment().into())
 }
