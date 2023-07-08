@@ -5,6 +5,10 @@ pub enum DiagnosticKind {
     #[diagnostic(code(shebling::bad_escape))]
     BadEscape,
 
+    #[error("bad operator!")]
+    #[diagnostic(code(shebling::bad_operator))]
+    BadOperator,
+
     #[error("bad quote!")]
     #[diagnostic(code(shebling::bad_quote))]
     BadQuote,

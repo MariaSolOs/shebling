@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests;
 
+mod expansion;
 mod quoted;
+mod token;
 mod trivia;
 mod word;
 
@@ -9,10 +11,10 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till},
     character::complete::{anychar, char, newline, one_of, satisfy},
-    combinator::{cut, map, opt, peek, recognize, value},
+    combinator::{consumed, cut, map, not, opt, peek, recognize, value},
     error::context,
-    multi::{many0, many1},
-    sequence::{delimited, pair, preceded, separated_pair, tuple},
+    multi::{many0, many1, separated_list0},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Finish,
 };
 use shebling_ast::*;
@@ -23,6 +25,7 @@ use crate::{
     span::{offset, ParseDiags, ParseSpan},
 };
 use quoted::{double_quoted, line_continuation, single_quoted};
+use token::token;
 use trivia::whitespace;
 
 /// Result of a `shebling` parser.

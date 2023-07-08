@@ -83,7 +83,25 @@ mod test {
         "###);
 
         // Missing the new line.
-        assert_debug_snapshot!(tests::parse_ok(line_ending, "\r", ""), @r###""###);
+        assert_debug_snapshot!(tests::parse_fail(line_ending, "\r"), @r###"
+        (
+            ParseError {
+                location: 1,
+                notes: [],
+            },
+            [
+                (
+                    "shebling::carriage_return",
+                    SourceSpan {
+                        offset: SourceOffset(
+                            0,
+                        ),
+                        length: 1,
+                    },
+                ),
+            ],
+        )
+        "###);
     }
 
     #[test]

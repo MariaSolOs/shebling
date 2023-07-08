@@ -2,6 +2,7 @@ use nom::{bytes::complete::take, combinator::map, Offset, Slice};
 use shebling_diagnostic::{Diagnostic, DiagnosticBuilder};
 use std::{
     cell::RefCell,
+    fmt,
     ops::{RangeFrom, RangeTo},
     str::{CharIndices, Chars},
 };
@@ -64,6 +65,12 @@ impl<'a> ParseSpan<'a> {
 
     pub(crate) fn diag(&self, builder: DiagnosticBuilder) {
         self.diags.push(builder);
+    }
+}
+
+impl fmt::Display for ParseSpan<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.fragment)
     }
 }
 
