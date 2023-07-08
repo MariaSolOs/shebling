@@ -6,11 +6,11 @@ mod word;
 
 use nom::{
     branch::alt,
-    bytes::complete::take_till,
+    bytes::complete::{is_not, take_till},
     character::complete::{anychar, char, newline, satisfy},
     combinator::{cut, map, opt, peek, recognize, value},
     error::context,
-    multi::many0,
+    multi::{many0, many1},
     sequence::{delimited, pair, preceded, tuple},
     Finish,
 };
@@ -21,7 +21,7 @@ use crate::{
     error::ParseError,
     span::{offset, ParseDiags, ParseSpan},
 };
-use quoted::single_quoted;
+use quoted::{double_quoted, single_quoted};
 
 /// Result of a `shebling` parser.
 pub(crate) type ParseResult<'a, R> = nom::IResult<ParseSpan<'a>, R, ParseError>;

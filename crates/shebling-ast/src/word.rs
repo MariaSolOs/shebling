@@ -5,10 +5,12 @@ pub struct Word(Vec<WordSgmt>);
 
 #[derive(Debug)]
 pub enum WordSgmt {
+    DoubleQuoted(DoubleQuoted),
     SingleQuoted(Spanned<String>),
 }
 
 /// A sequence of [word segments][DoubleQuotedSgmt] enclosed in `""`.
+#[derive(Debug)]
 pub struct DoubleQuoted(Vec<DoubleQuotedSgmt>);
 
 impl DoubleQuoted {
@@ -18,6 +20,7 @@ impl DoubleQuoted {
     }
 }
 
+#[derive(Debug)]
 pub enum DoubleQuotedSgmt {
     Lit(Spanned<String>),
 }

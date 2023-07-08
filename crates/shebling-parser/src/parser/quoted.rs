@@ -8,7 +8,16 @@ fn backslash(span: ParseSpan) -> ParseResult<char> {
 
 pub(crate) fn double_quoted(span: ParseSpan) -> ParseResult<DoubleQuoted> {
     fn lit(span: ParseSpan) -> ParseResult<String> {
-        todo!()
+        alt((
+            map(
+                many1(alt((
+                    escaped(DOUBLE_ESCAPABLE),
+                    recognize_string(is_not(DOUBLE_ESCAPABLE)),
+                ))),
+                |sgmts| sgmts.concat(),
+            ),
+            recognize_string(char('$')),
+        ))(span)
     }
 
     delimited(
@@ -138,5 +147,10 @@ mod tests {
             [],
         )
         "###);
+    }
+
+    #[test]
+    fn test_double_quoted() {
+        // TODO:
     }
 }
