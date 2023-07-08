@@ -8,4 +8,16 @@ pub enum DiagnosticKind {
     #[error("bad quote!")]
     #[diagnostic(code(shebling::bad_quote))]
     BadQuote,
+
+    #[error("literal carriage return")]
+    #[diagnostic(code(shebling::carriage_return))]
+    #[help("try running the script through `tr -d '\\r'`")]
+    CarrigeReturn,
+
+    #[error("unicode character!")]
+    #[diagnostic(
+        code(shebling::unichar),
+        help("Delete and retype it, or quote it if intended.")
+    )]
+    Unichar,
 }

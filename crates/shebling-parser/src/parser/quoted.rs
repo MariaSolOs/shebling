@@ -6,7 +6,7 @@ fn backslash(span: ParseSpan) -> ParseResult<char> {
     char('\\')(span)
 }
 
-pub(crate) fn double_quoted(span: ParseSpan) -> ParseResult<DoubleQuoted> {
+pub(super) fn double_quoted(span: ParseSpan) -> ParseResult<DoubleQuoted> {
     fn lit(span: ParseSpan) -> ParseResult<String> {
         alt((
             map(
@@ -47,11 +47,11 @@ fn escaped<'a>(can_escape: &'static str) -> impl FnMut(ParseSpan<'a>) -> ParseRe
     ))
 }
 
-fn line_continuation(span: ParseSpan) -> ParseResult<()> {
+pub(super) fn line_continuation(span: ParseSpan) -> ParseResult<()> {
     swallow(pair(backslash, newline))(span)
 }
 
-pub(crate) fn single_quoted(span: ParseSpan) -> ParseResult<String> {
+pub(super) fn single_quoted(span: ParseSpan) -> ParseResult<String> {
     // Parse the opening quote and the string.
     let (span, string) = preceded(char('\''), recognize_string(take_till(|c| c == '\'')))(span)?;
 
@@ -83,10 +83,10 @@ pub(crate) fn single_quoted(span: ParseSpan) -> ParseResult<String> {
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_debug_snapshot;
+
     use super::*;
     use crate::parser::tests;
-
-    use insta::assert_debug_snapshot;
 
     #[test]
     fn test_single_quoted() {

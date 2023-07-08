@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use pretty_assertions::assert_str_eq;
 use std::fmt;
 
-pub(crate) fn parse_fail<P, R>(
+pub(super) fn parse_fail<P, R>(
     parser: P,
     source: &str,
 ) -> (ParseError, Vec<(String, miette::SourceSpan)>)
@@ -21,7 +21,7 @@ where
     (err, summarize_diags(diags))
 }
 
-pub(crate) fn parse_ok<P, R>(
+pub(super) fn parse_ok<P, R>(
     parser: P,
     source: &str,
     remaining: &str,

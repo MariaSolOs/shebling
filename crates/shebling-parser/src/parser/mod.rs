@@ -2,16 +2,17 @@
 mod tests;
 
 mod quoted;
+mod trivia;
 mod word;
 
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, take_till},
-    character::complete::{anychar, char, newline, satisfy},
+    bytes::complete::{is_not, tag, take_till},
+    character::complete::{anychar, char, newline, one_of, satisfy},
     combinator::{cut, map, opt, peek, recognize, value},
     error::context,
     multi::{many0, many1},
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{delimited, pair, preceded, separated_pair, tuple},
     Finish,
 };
 use shebling_ast::*;
@@ -21,7 +22,8 @@ use crate::{
     error::ParseError,
     span::{offset, ParseDiags, ParseSpan},
 };
-use quoted::{double_quoted, single_quoted};
+use quoted::{double_quoted, line_continuation, single_quoted};
+use trivia::whitespace;
 
 /// Result of a `shebling` parser.
 pub(crate) type ParseResult<'a, R> = nom::IResult<ParseSpan<'a>, R, ParseError>;
@@ -67,39 +69,30 @@ pub(crate) fn parse(source_code: &str, file_path: &str) {
 
     let diags = ParseDiags::new();
 
-    match single_quoted(ParseSpan::new(source_code, &diags)).finish() {
+    let res = single_quoted(ParseSpan::new(source_code, &diags)).finish();
+    let source_code = Arc::new(miette::NamedSource::new(
+        file_path,
+        source_code.to_owned() + "\n",
+    ));
+
+    match res {
         Ok((span, res)) => {
             println!("OK SPAN {:#?}", span);
             println!("OK RES {:#?}", res);
-
-            let source_code = Arc::new(miette::NamedSource::new(
-                file_path,
-                source_code.to_owned() + "\n",
-            ));
-            for diag in diags {
-                println!(
-                    "{:?}",
-                    Report::new(diag).with_source_code(Arc::clone(&source_code))
-                );
-            }
         }
         Err(err) => {
             println!("ERR {:#?}", err);
-            // let diags = err.diags();
-            let source_code = Arc::new(miette::NamedSource::new(
-                file_path,
-                source_code.to_owned() + "\n",
-            ));
-            for diag in diags {
-                println!(
-                    "{:?}",
-                    Report::new(diag).with_source_code(Arc::clone(&source_code))
-                );
-            }
             println!(
                 "{:?}",
                 Report::new(err).with_source_code(Arc::clone(&source_code))
             );
         }
+    }
+
+    for diag in diags {
+        println!(
+            "{:?}",
+            Report::new(diag).with_source_code(Arc::clone(&source_code))
+        );
     }
 }

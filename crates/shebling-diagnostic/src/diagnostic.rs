@@ -77,6 +77,13 @@ impl DiagnosticBuilder {
         self
     }
 
+    /// Adds a labeled span with an empty message to the [Diagnostic].
+    pub fn span(mut self, span: impl Into<miette::SourceSpan>) -> Self {
+        self.labels
+            .push(miette::LabeledSpan::underline(span.into()));
+        self
+    }
+
     /// Sets the help message of the [Diagnostic].
     pub fn help(mut self, help: impl AsRef<str>) -> Self {
         self.help = Some(help.as_ref().into());

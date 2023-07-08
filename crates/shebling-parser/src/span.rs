@@ -8,19 +8,14 @@ use std::{
 
 use crate::parser::ParseResult;
 
-// TODO: Document.
+// This is basically what nom_locate does, except that we modify it to just
+// do what we need and carry the diagnostic context in a separate reference instead
+// of it being part of the span itself (which is lost on failure).
 
+/// Diagnostics reported during parsing. This should serve as possible hints
+/// of what went wrong in case of failure.
 #[derive(Debug)]
 pub(crate) struct ParseDiags(RefCell<Vec<Diagnostic>>);
-
-impl IntoIterator for ParseDiags {
-    type Item = Diagnostic;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.take().into_iter()
-    }
-}
 
 impl ParseDiags {
     pub(crate) fn new() -> Self {
@@ -32,6 +27,17 @@ impl ParseDiags {
     }
 }
 
+impl IntoIterator for ParseDiags {
+    type Item = Diagnostic;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.take().into_iter()
+    }
+}
+
+/// The input to `shebling` parsers.
+/// Besides containing the input source, it also carries the diagnostic context.
 #[derive(Clone, Debug)]
 pub(crate) struct ParseSpan<'a> {
     fragment: &'a str,
@@ -143,6 +149,18 @@ impl nom::Slice<RangeTo<usize>> for ParseSpan<'_> {
 
 impl<'a> nom::UnspecializedInput for ParseSpan<'a> {}
 
+impl<'a> nom::Compare<&str> for ParseSpan<'a> {
+    #[inline(always)]
+    fn compare(&self, t: &str) -> nom::CompareResult {
+        self.fragment.compare(t)
+    }
+
+    fn compare_no_case(&self, t: &str) -> nom::CompareResult {
+        self.fragment.compare_no_case(t)
+    }
+}
+
+/// Returns the offset of the given span.
 pub(crate) fn offset(span: ParseSpan) -> ParseResult<usize> {
     map(take(0usize), |span: ParseSpan| span.offset())(span)
 }
