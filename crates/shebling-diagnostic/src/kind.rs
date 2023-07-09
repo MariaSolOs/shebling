@@ -15,7 +15,7 @@ pub enum DiagnosticKind {
 
     #[error("literal carriage return")]
     #[diagnostic(code(shebling::carriage_return))]
-    #[help("try running the script through `tr -d '\\r'`")]
+    #[help("try running the script through tr -d '\\r'")]
     CarrigeReturn,
 
     #[error("unicode character!")]

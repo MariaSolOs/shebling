@@ -1,8 +1,8 @@
 use super::*;
 
-const DOUBLE_ESCAPABLE: &str = "\\\"$`";
+pub(super) const DOUBLE_ESCAPABLE: &str = "\\\"$`";
 
-fn backslash(span: ParseSpan) -> ParseResult<char> {
+pub(super) fn backslash(span: ParseSpan) -> ParseResult<char> {
     char('\\')(span)
 }
 
@@ -24,7 +24,7 @@ pub(super) fn double_quoted(span: ParseSpan) -> ParseResult<DoubleQuoted> {
         char('"'),
         map(
             many0(alt((
-                // TODO: dollar_exp
+                into(dollar_exp),
                 into(spanned(lit)),
                 // TODO: escaping_backquoted
             ))),
@@ -34,7 +34,9 @@ pub(super) fn double_quoted(span: ParseSpan) -> ParseResult<DoubleQuoted> {
     )(span)
 }
 
-fn escaped<'a>(can_escape: &'static str) -> impl FnMut(ParseSpan<'a>) -> ParseResult<String> {
+pub(super) fn escaped<'a>(
+    can_escape: &'static str,
+) -> impl FnMut(ParseSpan<'a>) -> ParseResult<String> {
     alt((
         map(line_continuation, |_| String::new()),
         map(pair(backslash, anychar), move |(bs, c)| {

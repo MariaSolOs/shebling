@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests;
 
+// TODO: Test all parsers.
+
 mod expansion;
 mod quoted;
 mod token;
@@ -9,11 +11,11 @@ mod word;
 
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_till},
+    bytes::complete::{is_a, is_not, tag, take_till},
     character::complete::{alpha1, alphanumeric1, anychar, char, newline, one_of, satisfy},
-    combinator::{consumed, cut, into, map, not, opt, peek, recognize, value},
+    combinator::{consumed, cut, into, map, not, opt, peek, recognize, value, verify},
     error::context,
-    multi::{many0, many1, separated_list0},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Finish,
 };
@@ -24,10 +26,11 @@ use crate::{
     error::ParseError,
     span::{offset, ParseDiags, ParseSpan},
 };
-use quoted::{double_quoted, line_continuation, single_quoted};
+use expansion::{brace_expansion, dollar_exp, dollar_sgmt, extglob};
+use quoted::{backslash, double_quoted, escaped, line_continuation, single_quoted};
 use token::token;
-use trivia::whitespace;
-use word::identifier;
+use trivia::{line_space, whitespace};
+use word::{identifier, lit_word_sgmt, word_sgmt};
 
 /// Result of a `shebling` parser.
 pub(crate) type ParseResult<'a, R> = nom::IResult<ParseSpan<'a>, R, ParseError>;

@@ -1,6 +1,6 @@
 use super::*;
 
-const UNISPACES: &str = "\u{A0}\u{200B}";
+pub(super) const UNISPACES: &str = "\u{A0}\u{200B}";
 
 fn carriage_return(span: ParseSpan) -> ParseResult<char> {
     let (span, cr) = spanned(char('\r'))(span)?;
@@ -13,7 +13,7 @@ fn line_ending(span: ParseSpan) -> ParseResult<char> {
     preceded(opt(carriage_return), newline)(span)
 }
 
-fn line_space(span: ParseSpan) -> ParseResult<char> {
+pub(super) fn line_space(span: ParseSpan) -> ParseResult<char> {
     alt((one_of(" \t"), |span| {
         let (span, unispace) = spanned(one_of(UNISPACES))(span)?;
         span.diag(Diagnostic::builder(DiagnosticKind::Unichar).label("unicode space", unispace));

@@ -19,6 +19,11 @@ impl<T> Spanned<T> {
     pub fn new(t: T, span: Span) -> Self {
         Self(t, span)
     }
+
+    /// Returns a reference to the spanned node.
+    pub fn inner(&self) -> &T {
+        &self.0
+    }
 }
 
 /// Trait for types that can be located in the source code.
