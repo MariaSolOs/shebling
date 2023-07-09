@@ -2,9 +2,22 @@ use super::*;
 
 pub(super) fn identifier(span: ParseSpan) -> ParseResult<String> {
     recognize_string(pair(
-        // Make sure that the first character is not a number.
+        // Make sure the first character is not a number.
         alt((alpha1, tag("_"))),
         many0(alt((alphanumeric1, tag("_")))),
+        // TODO: map(
+        //     alt((extglob, recognize_string(one_of("*?")), bracketed_glob)),
+        //     WordSgmt::Glob,
+        //     ),
+        //     // Fallback for other glob prefix characters:
+        // TODO: map(one_of("@!+["), |c| WordSgmt::Lit(c.into())),
+        // TODO: dollar_sgmt,
+        // TODO: map(brace_expansion, WordSgmt::BraceExpansion),
+        // TODO: map(backquoted, WordSgmt::BackQuoted),
+        // TODO: map(proc_sub, WordSgmt::ProcSub),
+        // TODO: lit_word_sgmt(pattern),
+        //     // Literal curly braces:
+        // TODO: map(alt((recognize_string(tag("{}")), lit_curly)), WordSgmt::Lit),
     ))(span)
 }
 
