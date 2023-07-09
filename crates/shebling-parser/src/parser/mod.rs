@@ -29,7 +29,7 @@ use crate::{
 use expansion::{brace_expansion, dollar_exp, dollar_sgmt, extglob};
 use quoted::{backslash, double_quoted, escaped, line_continuation, single_quoted};
 use token::token;
-use trivia::{line_space, whitespace};
+use trivia::{line_space, trivia, whitespace};
 use word::{identifier, lit_word_sgmt, word_sgmt};
 
 /// Result of a `shebling` parser.
@@ -76,7 +76,7 @@ pub(crate) fn parse(source_code: &str, file_path: &str) {
 
     let diags = ParseDiags::new();
 
-    let res = single_quoted(ParseSpan::new(source_code, &diags)).finish();
+    let res = trivia(ParseSpan::new(source_code, &diags)).finish();
     let source_code = Arc::new(miette::NamedSource::new(
         file_path,
         source_code.to_owned() + "\n",

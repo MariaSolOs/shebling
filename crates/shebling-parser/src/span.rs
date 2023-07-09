@@ -9,12 +9,14 @@ use std::{
 
 use crate::parser::ParseResult;
 
-// This is basically what nom_locate does, except that we modify it to just
-// do what we need and carry the diagnostic context in a separate reference instead
-// of it being part of the span itself (which is lost on failure).
+// This module basically replicates what nom_locate does, except that it is a simpler
+// version and we carry the diagnostic context in a separate reference instead of it
+// being part of the span itself (which is lost on failure).
 
-/// Diagnostics reported during parsing. This should serve as possible hints
+/// Diagnostics reported during parsing. These should serve as possible hints
 /// of what went wrong in case of failure.
+/// It might also contain minor lints that refer to code not included in the AST (e.g.
+/// trivia).
 #[derive(Debug)]
 pub(crate) struct ParseDiags(RefCell<Vec<Diagnostic>>);
 
